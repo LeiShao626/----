@@ -8,3 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Local copy of this repository itself (downloaded archive + extracted folder)
+-----master/
+-----master.zip

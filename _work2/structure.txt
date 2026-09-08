@@ -1,0 +1,1231 @@
+
+======================================================================
+PAGE 1  (w=612 h=792)
+  [96,90] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [197,139] Jiaxuan Zou * 1 Yaozhong Xiong * 2 Yong Liu 2
+  [150,176] Abstract
+  [307,178] verbalization comes at a steep cost: it suffers from inher-ent inefficiency due to excessive sequence lengths and thecomputational burden of autoregressive bottlenecks (Honget al., 2025; Yue et al., 2025). To address these scalabil-ity limitations, recent research has aggressively pivotedtoward implicit reasoning, often termed Latent CoT (Yeet al., 2025). In this paradigm, the model operates withina continuous internal state space, processing informationthrough ”silent” vector transformations without generat-ing intermediate tokens. By leveraging mechanisms suchas token-level manipulation (Tack et al., 2025; Sun et al.,2025) and trajectory optimization (Cheng & Van Durme,2024; Hao et al., 2024a), these models promise to reducecomputational complexity and enable more diverse, high-dimensional reasoning paths that are not constrained by thevocabulary of natural language (Hao et al., 2024a; Zhanget al., 2025a).
+  [75,198] Latent Chain-of-Thought (Latent CoT) modelspromise efficient reasoning via continuous repre-sentations, yet exhibit puzzling performance in-consistencies: excelling at exploration (ProsQA:97.0%) but failing at computation (GSM8K:34.1%). We reveal that this trade-off is gov-erned by decisional certainty. Our contributionsare threefold: (1) We theoretically characterizethe fundamental Exploration-Execution Trade-off,proving that high certainty enables precise ex-ecution but inhibits exploration, while low cer-tainty facilitates search but causes error accu-mulation. (2) We introduce the Symbolic In-dex—quantifying decisional commitment—as thecore mechanism governing this trade-off and es-tablish its causal relationship with both executionstability and exploration capability. (3) We provethat curriculum learning is theoretically necessary,as direct training provably fails due to distribu-tional mismatch. Our framework shifts the designparadigm from binary architectural choices to-ward adaptive systems that dynamically regulatedecisional certainty based on task demands.
+  [11,230] arXiv:2602.01148v1  [cs.AI]  1 Feb 2026
+  [307,387] Despite these architectural innovations, a stark and puzzlingdichotomy has emerged in empirical performance. As pre-sented in Table 1, Explicit CoT and Latent CoT exhibitcomplementary—and mutually exclusive—failure modes.Explicit CoT excels at tasks requiring precise symbolicmanipulation and rigorous logic execution, such as the arith-metic reasoning in GSM8K (42.9% accuracy). However,it struggles significantly with tasks necessitating flexibleexploration or strategic planning, such as ProsQA (77.5%),often committing too early to a rigid path. Conversely,Latent CoT achieves superior performance on exploratorytasks (97.0%), leveraging its continuous representation totraverse a broader search space. Yet, this flexibility comeswith a severe penalty: Latent CoT fails catastrophicallyon precision-heavy computational tasks, where exact statemaintenance is critical. Furthermore, Latent CoT exhibitsextreme training fragility; as shown in our ablation results,removing curriculum learning causes performance to col-lapse (e.g., from 99.8% to 52.4% on ProntoQA), suggestinga fundamental instability in how these models learn to rea-son.
+  [55,500] 1. Introduction
+  [55,521] The advent of Large Language Models (LLMs) (Guo et al.,2025; OpenAI, 2025; DeepSeek-AI, 2025) has marked aparadigm shift in artificial intelligence, fundamentally trans-forming the landscape of complex reasoning tasks (Liu et al.,2025). To date, the dominant methodology for eliciting rea-soning capabilities has been the explicit Chain-of-Thought(CoT) (Wei et al., 2022; Sun et al., 2023). By forcing mod-els to verbalize intermediate steps as discrete tokens, CoTimposes a structured, human-interpretable logic flow thatsignificantly improves performance. However, this explicit
+  [307,644] These empirical observations highlight a critical gap inour theoretical understanding. Currently, the field lacksa unified framework to explain why high performance inexploration necessitates a sacrifice in execution precision,and why implicit models are intrinsically difficult to train.Existing literature largely treats these architectures as bi-
+  [55,647] 1Department of Mathematics and Statistics, Xi’an JiaotongUniversity, Xi’an 710049, Shaanxi Province, China 2Departmentof Artificial Intelligence, Gaoling School of Artificial Intelligence,Renmin University of China, Beijing 100872, China. Correspon-dence to: Yong Liu <liuyonggsai@ruc.edu.cn>.
+  [55,708] Preprint. February 3, 2026.
+  [296,732] 1
+
+======================================================================
+PAGE 2  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [55,67] Table 1. Performance of discrete (CoT) and latent (Coconut) reasoning models reveals a puzzling trade-off. CoT excels at precise
+  [55,77] computation (GSM8K) but struggles with flexible reasoning (ProsQA). Conversely, Latent CoT thrives on flexibility but fails atcomputation and is highly sensitive to its training curriculum. *Results from (Hao et al., 2024b).
+  [132,109] MethodGSM8KProntoQAProsQA
+  [198,125] Acc. (%)# TokensAcc. (%)# TokensAcc. (%)# Tokens
+  [106,142] CoT42.9 ± 0.225.098.8 ± 0.892.577.5 ± 1.949.4No-CoT16.5 ± 0.52.293.8 ± 0.73.076.7 ± 1.08.2
+  [106,171] COCONUT34.1 ± 1.58.299.8 ± 0.29.097.0 ± 0.314.2- w/o curriculum14.4 ± 0.88.252.4 ± 0.49.076.1 ± 0.214.2
+  [307,217] 2. Related Work
+  [55,219] nary choices—discrete versus continuous—without charac-terizing the underlying decision-theoretic mechanism thatgoverns their respective strengths and weaknesses. Con-sequently, current architectural designs rely on heuristicsrather than principled regulation of the model’s internal rea-soning process, leading to systems that are either precisebut rigid, or flexible but hallucinatory.
+  [307,238] Unlike explicit CoT, which is constrained to a single dis-crete path, Latent CoT leverages continuous latent spacesto achieve exploratory diversification. Research in this areaenables models to explore multiple reasoning trajectories inparallel, enhancing robustness on complex problems. Tech-niques include sampling latent trajectories (Chen et al.,2024), using probabilistically weighted concepts (Zhanget al., 2025b), and injecting continuous tokens to enrichthe search space (Xu et al., 2025b;a; Gozeten et al., 2025).These empirical successes demonstrate the value of ex-ploratory capabilities. We formalize this intuition by prov-ing that exploration capability stems from maintaining lowdecisional certainty—a low Symbolic Index—and by es-tablishing formal bounds on the KL divergence from idealuniform exploration priors (Theorem 4.5).
+  [55,309] In this work, we propose that this trade-off is not an arbitraryartifact of architecture, but a fundamental consequence ofdecisional certainty. We introduce the Symbolic Index—aquantifiable measure of a model’s commitment to a specificreasoning path—as the core mechanism unifying these phe-nomena. Our key insight is that Explicit CoT operates ina high-certainty regime. This regime guarantees compu-tational fidelity through an error-correcting discretizationprocess (the selection of specific tokens), but it collapsesexploration by committing too early to a single trajectory.In contrast, Latent CoT operates in a low-certainty regime,maintaining a superposition of multiple reasoning paths.While this superposition enables robust exploration of com-plex solution spaces, it suffers from noise accumulationthat eventually destroys symbolic precision, as there is nodiscrete quantization step to reset the internal state.
+  [307,424] A distinct line of research focuses on trajectory-level la-tent optimization, compressing entire explicit reasoningchains into continuous representations. Early works aimedto maintain semantic fidelity by anchoring latent states toexplicit steps (Cheng & Van Durme, 2024; Liu et al., 2024;Shen et al., 2025b). More recent efforts improve efficiencythrough dynamic compression or adaptive control (Zhanget al., 2025a; Ma et al., 2025; Tan et al., 2025; Wang et al.,2025a). A particularly important strategy is progressive in-ternalization, where explicit steps are gradually replaced bylatent thoughts via curriculum learning (Deng et al., 2024;Hao et al., 2024a; Shen et al., 2025a) or internal iterations(Zeng et al., 2025; Ruan et al., 2025). These methods, es-pecially those using a curriculum, provide the empiricalmotivation for our analysis. Our work complements theseempirical findings by establishing that progressive trainingis not merely beneficial but theoretically necessary to over-come a fundamental distributional mismatch (Theorem 5.1)and ensure convergence (Theorem 5.2, Section 5).
+  [55,506] Our contributions are threefold. First, we theoretically char-acterize the fundamental exploration-execution trade-off.We prove that the high decisional certainty of CoT leads tovanishing exploration, while the low certainty of Latent CoTamplifies sub-decisional noise, serving as the direct causeof failure on arithmetic tasks. Second, we formalize theSymbolic Index as a regulatory metric, providing concretedesign principles for next-generation architectures that candynamically transition between exploration and execution.Third, we resolve the training stability puzzle by provingthat curriculum learning is theoretically necessary for LatentCoT. We demonstrate that without a curriculum, training isguaranteed to fail due to a distributional mismatch betweenthe model’s self-generated latent states and valid reasoningtrajectories—a gap that the curriculum provably bridges.
+  [307,657] Complementing these architectural advances, a parallelstream of research investigates the fine-grained control andanalysis of internal states. Signal-guided control methodsinsert specialized, non-text-producing tokens to steer inter-nal reasoning (Herel & Mikolov, 2024; Goyal et al., 2024;
+  [296,732] 2
+
+======================================================================
+PAGE 3  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [307,68] 4. Theoretical Analysis
+  [55,69] Zelikman et al., 2024; Pfau et al., 2024; Wang et al., 2024).Simultaneously, internal state analysis uses techniques likeprobing or distillation to find mechanistic evidence of im-plicit reasoning, such as discovering encoded reasoningtrees in attention patterns (Deng et al., 2023; Hou et al.,2023; Wang et al., 2025b; Yu et al., 2024). Both approacheshighlight the centrality of internal states. We unify thesemechanistic insights by proving that variance in internal cer-tainty is the root cause of the exploration-execution trade-off(Theorems 4.11 and 4.12, Section 4.4). Our Symbolic Indexprovides a computable, quantifiable metric for these other-wise opaque internal states, offering a principled evaluativecriterion for future architectural innovations.
+  [307,89] This section provides a deep theoretical analysis of thefundamental differences and trade-offs between CoT andLatent CoT. We begin by revealing the mathematical un-derpinnings of the Coconut training objective through thelens of Information Bottleneck theory. Subsequently, wedirectly analyze model performance along two key dimen-sions: planning and exploration capability versus com-putational execution precision. Finally, we identify deci-sional certainty—quantified by the Symbolic Index—as thecore mechanism regulating this trade-off, and theoreticallyestablish the necessity of curriculum learning for effectivetraining of Latent CoT models.
+  [55,240] 3. Preliminaries
+  [307,245] 4.1. Duality with the Information Bottleneck
+  [55,261] We consider supervised learning for reasoning tasks, wherethe input is a random variable X from which instances xare drawn. Each input x and answer y are connected bya chain-of-thought S = (s1, . . . , sM). We compare twoparadigms for modeling this process: Chain-of-Thought(CoT) and Latent CoT, the latter trained via the Coconutcurriculum.
+  [307,264] Directly analyzing the behavior of the Coconut-trainedmodel is challenging due to its staged, implicit compressionobjective. To overcome this, we show that the Coconutcurriculum is mathematically equivalent to solving a well-studied information-theoretic objective—the ConditionalInformation Bottleneck (Tishby & Zaslavsky, 2015). Thisequivalence allows us to leverage established tools frominformation theory to rigorously characterize the model’sproperties.
+  [55,357] Chain-of-Thought (CoT)CoT models autoregressivelygenerate discrete reasoning steps:
+  [306,378] This duality can be understood intuitively: the Coconutobjective at stage k poses an information compression prob-lem. The model must compress the past chain-of-thought,S(1...k), into a single latent vector, hk, with the sole pur-pose of maximizing its utility for predicting the future chain,S(k+1...M). This is precisely the problem addressed by theInformation Bottleneck (IB) principle: finding a compressed”bottleneck” representation of a source (the past) that maxi-
+  [147,389] MY
+  [163,397] pθ(sk|x, S(1...k−1)).
+  [101,399] pθ(S|x) =
+  [146,414] k=1
+  [55,429] At inference,token selection commits to a singlepath—enabling precise computation but risking early mis-steps (Mohtashami et al., 2025; Yu et al., 2025; Xu et al.,2024; Emmons et al., 2025).
+  [307,473] mally preserves information about a target (the future). TheCoconut training process thus implicitly learns an optimalinformation compressor. Theorem 4.1 formalizes this intu-ition.Theorem 4.1 (Coconut-CIB Duality). Under the constraintof any finite model capacity, the optimization objective ofthe Coconut curriculum (Preliminaries 3) at stage k canbe rigorously reformulated as a constrained optimizationproblem. Its Lagrangian dual is precisely the ConditionalInformation Bottleneck (CIB) problem. Specifically:
+  [54,490] Latent Chain-of-Thought (Latent CoT)Latent CoT it-erates in continuous space, producing latent states H =(h1, . . . , hM), hk ∈Rd:
+  [140,534] hk = fθ(hk−1).
+  [55,555] Each hk encodes multiple potential reasoning paths, sup-porting exploration but accumulating noise over steps (Konget al., 2025; Zhu et al., 2025; Su et al., 2025; Orlicki, 2025).
+  [307,601] Primal Problem: The optimization process of Coconut isequivalent to solving:
+  [55,604] Coconut Training (Hao et al., 2024b)Since direct super-vision on H is infeasible, Coconut uses a curriculum. Atstage k, it learns to compress the prefix S(1...k) into a latentstate hk to predict the suffix S(k+1...M):
+  [359,626] minp(hk|X) H(S(k+1...M) | hk, X)(1)
+  [358,649] s.t.I(hk; S(1...k) | X) ≤R(2)
+  [71,659] L(k)
+  [78,660] Coconut(θ) = Ep(x,S)[−log pθ(S(k+1...M)|hk, x)].
+  [394,668] I(hk; S(1...k) | X)
+  [390,669] h
+  [331,673] Dual:minp(hk|X)
+  [55,683] The curriculum progresses from k = 0 (pure CoT) to k =M (full latent reasoning), gradually internalizing symbolicsteps that bridge the discrete and continuous CoT.
+  [395,693] −β(k)I(hk; S(k+1...M) | X)
+  [513,694] i
+  [530,698] (3)
+  [296,732] 3
+
+======================================================================
+PAGE 4  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [55,68] where β(k) > 0 ideally satisfies β(k) ∼kM−k.
+  [307,69] for a constant c > 0, implying that DKL →∞as certaintyκ →∞.
+  [55,93] Interpretation of β(k).The trade-off parameter β(k) ∼kM−k reflects the curriculum’s shifting emphasis acrossstages. As k increases, the model compresses more past in-formation while maintaining predictive power over a shorterfuture sequence, dynamically balancing compression effi-ciency and predictive utility.This dynamic weighting ensuresoptimal balance at each stage; we formalize the training ne-cessity in §5.
+  [307,104] Proof in Appendix A.3.Remark 4.4 (Sampling-Based Methods). Our analysis gov-erns the generation of a single reasoning chain. While en-semble methods like Self-Consistency (Wang et al., 2023)introduce exploration by sampling multiple chains, the com-putational integrity of each individual chain still hinges onthe high-certainty commitments that define CoT’s execution-focused nature. Therefore, our core results remain funda-mental.
+  [55,195] The main challenge is to connect Coconut’s operational
+  [55,207] training loss to a formal information-theoretic objective.The proof achieves this by framing the optimization as a
+  [307,223] This quantifies CoT’s poor performance on exploratory taskslike ProsQA (77.5% vs. Latent CoT’s 97.0% in Table 1): thedivergence DKL →∞formalizes that CoT’s distributionbecomes arbitrarily distant from the uniform explorationprior.
+  [55,231] constrained problem and applying Lagrangian duality, re-vealing that Coconut implicitly solves the Conditional Infor-mation Bottleneck. Proof in Appendix A.2.
+  [55,280] 4.2. Latent CoT excels in exploration
+  [307,288] In contrast, Latent CoT’s training objective—dual to theConditional Information Bottleneck (Theorem 4.1)—im-poses implicit regularization against overconfidence, ensur-ing sustained exploration:
+  [55,299] We model reasoning as traversal over a decision DAGQ := (G, vstart, Vtarget). At any node v, let Nvalid(v) bethe set of valid next steps. An ideal explorer uses a uniformprior qPR(u | v) =1|Nvalid(v)|I[u ∈Nvalid(v)]. We measuredeviation from this ideal via DKL(qPR∥p), where p is themodel’s next-step distribution: low KL divergence impliesbroad exploration; high KL divergence indicates overconfi-dence and premature commitment.
+  [307,341] Theorem 4.5 (Exploration Capability Guarantee of LatentCoT). There exist constants δ ∈(0, 1) and finite c such that
+  [354,375] DKL(qPR∥pCoconut) ≤−1
+  [449,381] 2 log δ −c.
+  [55,402] Our analysis first focuses on the intrinsic properties of a sin-gle, coherent reasoning path, which constitutes the funda-mental building block of the CoT paradigm. Understandingthe generative process of one such trajectory is essential fordissecting the core mechanism of execution. To formalizethis, we characterize the high-certainty behavior exhibitedby CoT during successful reasoning. This is not an arbitrarymodeling choice but an inherent consequence of CoT’s train-ing via teacher-forcing on deterministic reasoning chains,which naturally induces sharply peaked distributions.Assumption 4.2 (κ-Concentrated Distribution for CoT). Ata decision point with B options, we model the generativedistribution of a single CoT step, pCoT, as being drawnfrom a Dirichlet prior with a large concentration parameterκ = P
+  [307,414] Proof in Appendix A.4. This finite upper bound on DKLensures that Latent CoT maintains a non-degenerate dis-tribution over options, contrasting sharply with CoT’s un-bounded divergence (Theorem 4.3). This guarantees robustexploration, complementing CoT’s strength in execution,which we analyze next.
+  [307,499] 4.3. Latent CoT’s Fragility in Symbolic Computation
+  [307,517] While Latent CoT’s continuous state space supports robustexploration (Section 4.2), it is a liability for tasks requiringhigh-fidelity symbolic reasoning, such as GSM8K. UnlikeCoT’s discrete symbolic operations, Latent CoT’s continu-ous state representations are inherently vulnerable to noiseaccumulation, which undermines precise step-by-step com-putation.
+  [55,572] i αi. A large κ yields a sharply peaked distribu-tion, reflecting the high decisional certainty required fordeterministic, high-fidelity execution.
+  [307,607] To formalize this, we analyze the effect of small internalerrors, termed sub-decisional perturbations—noise thatcorrupts a model’s internal state but is insufficient to alterthe immediate output.
+  [55,616] Under this assumption, CoT inevitably collapses its distri-bution at each step:Theorem 4.3 (Exploration Deficiency of CoT). As κ →∞,the entropy H(pCoT) →0, and
+  [307,658] Definition 4.6 (Sub-decisional Perturbation). Let lk = l∗
+  [307,660] k +ϵk be the logit vector at step k. A perturbation ϵk is sub-decisional if
+  [78,671] DKL(qPR∥pCoT) = B −1
+  [162,677] Blog κ −log B
+  [239,689]  1
+  [151,696] −(B −1) log c
+  [255,696] 
+  [185,703] B+ O
+  [264,703] ,
+  [358,705] argmax(l∗
+  [397,705] k + ϵk) = argmax(l∗
+  [480,707] k).
+  [248,710] κ
+  [296,732] 4
+
+======================================================================
+PAGE 5  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [307,69] Definition 4.9 (Symbolic Index IS). At a decision pointwith a vocabulary of valid tokens V, let p(u | h, x) be themodel’s output distribution. The Symbolic Index is theprobability of the most likely token:
+  [55,70] This concept highlights a key architectural divergence. CoTmodels are inherently robust to such perturbations due totheir discrete generation process.
+  [54,108] Theorem 4.7 (Symbolic Integrity of CoT). Let S∗=(s∗
+  [55,118] 1, . . . , s∗M) be the noise-free CoT trajectory and ˆS thetrajectory under sub-decisional perturbations. Then
+  [355,126] IS = max
+  [380,126] u∈V p(u | h, x) ∈[1/|V|, 1].
+  [136,153] P[ˆsM̸ = s∗
+  [176,155] M] = 0.
+  [307,157] A high IS (≈1) signifies high certainty, characteristic ofCoT’s discrete commitments. A low IS signifies distributedconsideration over multiple options, characteristic of LatentCoT.
+  [55,183] Proof in Appendix A.5.
+  [55,201] Theorem4.7formalizesCoT’sresiliencetosub-decisional perturbations.The underlying mechanismis a discretization-reset process: at each step, the argmaxoperation acts as an error-correcting filter, projecting thecontinuous hidden state to a discrete token and therebydiscarding any sub-decisional noise. This reset ensuresthat subsequent reasoning begins from a clean symbolicrepresentation, preventing error propagation across thereasoning chain.
+  [307,211] First, we establish the direct link between this certainty androbustness against computational noise. The mechanismfor this robustness is the separation between the top twochoices, which we term the Logit Decision Margin.
+  [307,262] Definition 4.10 (Logit Decision Margin ∆l). Let li∗andlj∗be the logits of the most likely and second-most likelytokens, respectively. The margin is their difference: ∆l =li∗−lj∗.
+  [55,314] In stark contrast, Latent CoT lacks this discretization-resetmechanism. Its continuous state hk is passed directly to thenext step without quantization, carrying forward any pertur-bation. For a model with transition function fθ (Lipschitzconstant LF ) and i.i.d. noise ϵ(k)
+  [307,319] The following theorem proves that high certainty guaran-tees a large decision margin, making the model resilient toperturbations.
+  [307,359] Theorem 4.11 (Symbolic Stability Theorem). The LogitDecision Margin ∆l is lower-bounded by the Symbolic IndexIS as follows:
+  [177,362] h∼N(0, σ2
+  [55,364] hId), this errorpropagation is quantifiable:
+  [55,392] Theorem 4.8 (Compounding Error in Latent Computation).Let EM = hM −h∗
+  [420,402] IS1 −IS
+  [456,402] 
+  [132,403] M. Then for M ≥1,
+  [381,409] ∆l ≥log
+  [465,409] .
+  [103,424] E[∥EM∥2] = 1 −L2M
+  [200,430] · dσ2h > 0.
+  [163,431] F1 −L2F
+  [307,441] Proof in Appendix A.8. This theorem establishes a directrelationship: higher decisional certainty guarantees a largerprotective margin. For instance, a high-certainty CoT withIS = 0.99 has a margin ∆l ≥log(99) ≈4.6, makingits decision robust to significant noise. In contrast, a low-certainty Latent CoT with IS = 0.6 has a margin of only∆l ≥log(1.5) ≈0.4, rendering it vulnerable to small
+  [55,466] Proof in Appendix A.6. The term 1−L2M
+  [55,471] F1−L2F demonstrates thatthe expected squared error grows with the number of reason-ing steps M. If the model’s transition function is expansive(LF > 1), the error compounds exponentially; even for sta-ble functions (LF ≤1), error still accumulates. This mathe-matical result directly explains Latent CoT’s performancedegradation on precision-sensitive tasks like GSM8K. Theaccumulation of even small perturbations over a long reason-ing chain corrupts the final state, undermining the integrityrequired for symbolic computation and complementing thedichotomy analyzed in Section refexploration abi.
+  [307,525] perturbations. This explains CoT’s noise immunity andsymbolic integrity (Theorem 4.7).
+  [307,555] However, this stability comes at a direct and quantifiablecost to exploration. High certainty forces the model’s distri-bution away from the uniform ideal required for unbiasedexploration. The next theorem formalizes this trade-off.
+  [307,606] Theorem 4.12 (Exploration-Execution Trade-off Theorem).For a decision with B valid options, the KL divergence from
+  [55,617] 4.4. Unifying the Trade-off via the Symbolic Index
+  [307,630] the ideal uniform exploration prior qPR is lower-boundedby:
+  [55,636] The analyses in Section 4.2 and Section 4.3 reveal a di-chotomy: CoT excels at execution but lacks exploration,while Latent CoT does the opposite. Here, we unify thesebehaviors through a single, quantifiable principle: the degreeof decisional certainty at each reasoning step. To formalizethis, we introduce the Symbolic Index (IS), a measure ofhow committed the model is to its top choice.
+  [494,662] 1 −IS
+  [531,662] 
+  [307,668] DKL(qPR∥p) ≥log B+IS log(IS)+(1−IS) log
+  [540,668] .
+  [504,675] B −1
+  [307,695] This bound is minimized when IS = 1/B and grows as
+  [307,707] IS →1.
+  [296,732] 5
+
+======================================================================
+PAGE 6  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [55,69] Proof in Appendix A.9. This inequality proves that gainingexecution stability by increasing IS necessarily degradesexploration capability by increasing the divergence from auniform policy. It quantifies the inherent tension betweencommitting to a single path and keeping options open, ex-plaining CoT’s exploration deficiency (Theorem 4.3).
+  [307,70] the expected value of this function under the induced policy:
+  [361,89] R(θ) = Ex∼D,h∼Pθ(·|x)[V (h)].
+  [307,114] Without a curriculum, the model must learn from its owngenerated latent states. These self-generated states comefrom a biased distribution Pbiased of superficial representa-tions, which is fundamentally different from the true expertdistribution Pθ∗. Since the valuation function V (h) is non-uniform (favoring reasoning states), learning from a mis-matched distribution guarantees suboptimal performance.
+  [55,147] Together, these results establish IS as the core regulator,unifying both paradigms:
+  [63,183] 1. CoT: High-IS regime ensures large decision marginsfor robust execution (Theorems 4.11, 4.7) but degradesexploration (Theorem 4.12).
+  [307,202] Theorem 5.1 (Provable Failure of Training without Cur-riculum). Let Dnc be a dataset of latent states drawn froma biased distribution Pbiased. If this distribution is intrinsi-cally suboptimal compared to the expert (i.e., R(Pbiased) ≤R(θ∗) −∆for some gap ∆> 0), then the model ˆθMLEtrained on Dnc is strictly bounded away from optimality:
+  [63,226] 2. Latent CoT: Low-IS regime enables broad exploration(Theorem 4.5) but implies small decision margins,causing vulnerability to sub-decisional noise that com-pounds over steps (Theorem 4.8), leading to failure onprecision-sensitive tasks.
+  [368,282] R(ˆθMLE) ≤R(θ∗) −C(∆),
+  [55,299] This framework shifts focus from binary architecturalchoices to managing decisional certainty, suggesting adap-tive systems that dynamically regulate IS based on taskdemands.
+  [307,307] where C(∆) > 0 is a constant determined by the bias. Thisimplies that the model’s success rate is permanently cappedbelow the expert’s performance, regardless of dataset size.
+  [307,353] Proof in Appendix A.10. This theorem demonstrates thattraining on ”shortcut” latent states locks the model into asuboptimal policy. Unlike the variance error which van-ishes with data (as seen in Theorem 5.2), this bias error isirreducible.
+  [55,362] 5. Why Curriculum Learning Works
+  [55,382] Having established that IS governs the exploration-execution trade-off in trained models (§4.4), we now con-front a fundamental question: how can we train a modelto operate in the low-IS regime required for robust explo-ration? This reveals a paradox inherent to Latent CoT train-ing. Unlike Explicit CoT, which benefits from token-levelsupervision at each reasoning step, Latent CoT must learnto generate meaningful latent representations hk withoutexplicit ground truth.
+  [307,426] 5.2. Curriculum Learning as Controlled IS Transition
+  [307,445] From the perspective of the Symbolic Index, this canbe understood as a controlled transition. In early stages(pure CoT), high IS ensures accurate token-level gradientsthrough error-correcting discretization. In hybrid stages,the prefix operates in latent space (low IS), but the suffixretains explicit token generation. This anchors the latentrepresentations to valid reasoning traces. Finally, the modelachieves the low IS required for exploration, stabilized bythe progressive internalization.
+  [55,503] 5.1. The Training Paradox of Latent CoT
+  [55,522] An untrained model has no incentive to perform multi-stepreasoning encoded in hk; instead, it tends to learn ”shortcut”representations that merely map surface-level input patternsto outputs. Training requires reliable gradient signals, whichnecessitate high-certainty (high-IS) predictions to minimizeloss variance. However, the ultimate goal is to learn low-IS representations that enable exploration. Direct trainingthus traps the model in a high-IS regime, preventing theemergence of true latent reasoning.
+  [307,559] In our IL framework, this procedure effectively provides su-pervised samples of latent thoughts grounded in correctreasoning, equivalent to drawing samples directly fromPθ∗(h|x). Crucially, convergence in distribution guaranteesconvergence in performance. Since the valuation functionV (h) is bounded in [0, 1], the difference in success rates|R(ˆθ)−R(θ∗)| is upper-bounded by the Total Variation dis-tance between the policies. Consequently, minimizing thedistributional divergence via curriculum learning directlyoptimizes the task success rate.
+  [55,636] To rigorously analyze this difficulty, we model the problemwithin an Imitation Learning (IL) framework. Let Pθ∗(h|x)denote the unobserved expert policy that generates optimal,reasoning-encoded latent states. We define a binary valua-tion function V (h) ∈{0, 1}, where V (h) = 1 implies thelatent state leads to the correct answer. The primary objec-tive is to maximize the Task Success Rate R(θ), defined as
+  [307,683] Theorem 5.2 (Provable Success of Training with Curricu-lum). Under standard statistical learning conditions, MLEon a dataset Dc of size n generated via the curriculum
+  [296,732] 6
+
+======================================================================
+PAGE 7  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [55,67] yields a model ˆθ whose success rate approaches that of theexpert:
+  [487,74] Nucleus Tokens
+  [320,80] Step 1
+  [503,83] *,-./123456789 2
+  [523,83] 01 3 - 4 5 19 6 7 8 10 91012 1250
+  [320,98] Step 2
+  [160,100]  r
+  [255,100] !
+  [310,101] Reasoning Step
+  [179,103] d log n + log(1/δ)
+  [78,107] R(ˆθ) ≥R(θ∗) −O
+  [265,110] ,
+  [320,116] Step 3
+  [213,117] n
+  [320,134] Step 4
+  [55,138] with high probability 1 −δ. The performance gap vanishesas the dataset size n →∞.
+  [320,153] Step 5
+  [320,171] Step 6
+  [55,171] Proof in Appendix A.11. This theorem confirms that by us-ing the explicit CoT as a scaffold to generate valid trainingdata, the curriculum ensures that the student model can prov-ably converge to the optimal expert policy. In conclusion,curriculum learning is theoretically necessary to resolve thedistributional mismatch (Theorem 5.1) and ensure conver-gence (Theorem 5.2).
+  [339,189] 0.00.20.40.60.81.0Renormalized Probability
+  [307,216] Figure 1. Symbolic Index on GSM8K. Latent CoT (shown)
+  [308,226] maintains a low Symbolic Index (IS ∈[0.2, 0.5]), indicating adispersed probability distribution. It lacks the probability concen-tration (IS ≈1.0) observed in Explicit CoT.
+  [487,264] Nucleus Tokens
+  [320,270] Step 1
+  [55,270] 6. Experiments
+  [499,272] .?Fhpw\n t aer w b f n g
+  [520,272]  is y W rusel shrenump zmpae Alex MaxEvery
+  [320,288] Step 2
+  [310,290] Reasoning Step
+  [55,291] We conduct an empirical evaluation to validate the theoreti-cal framework established in Section 4.4. Our experimentsverify three hypotheses: (1) Latent CoT and Explicit CoToperate in distinct regimes of decisional certainty (validat-ing Theorems 4.3 & 4.5); (2) this difference in certaintydetermines robustness to computational noise (validatingTheorems 4.11 & 4.12); and (3) Latent CoT exhibits erroraccumulation consistent with continuous state dynamics(validating Theorem 4.8).
+  [320,306] Step 3
+  [320,324] Step 4
+  [320,342] Step 5
+  [320,361] Step 6
+  [339,379] 0.00.20.40.60.81.0Renormalized Probability
+  [307,406] Figure 2. Symbolic Index on ProsQA. Latent CoT exhibits a
+  [55,411] Experimental SetupWe use the GPT-2 (124M) architec-ture. We compare a standard Explicit CoT model againsta Latent CoT model trained via the Coconut curriculum(M = 6 latent steps).Evaluations are performed onGSM8K (Cobbe et al., 2021) for precise symbolic com-putation, and ProsQA (Hao et al., 2024b) for exploratoryreasoning. Implementation details are in Appendix A.1.
+  [308,415] stable, low IS distribution across reasoning steps. This validatesTheorem 4.5, showing that the model distributes probability massacross multiple latent paths rather than converging to a singletoken.
+  [326,477] concentration (IS ≪1.0). According to Theorem 4.11,a low IS corresponds to a minimal Logit DecisionMargin ∆l. Unlike Explicit CoT, which utilizes the‘argmax‘ operator to reset state variance at each token,
+  [55,508] 6.1. Analysis of Decisional Certainty (IS)
+  [327,525] Latent CoT propagates the variance continuously. Thislack of intermediate error correction leads to the lowercomputational accuracy (34.1%).
+  [55,526] To verify the Exploration-Execution Trade-off (Theo-rem 4.12), we measure the Symbolic Index (IS), defined asthe maximum token probability at a given step.
+  [55,568] Figures 1 and 2 show the distribution of IS values:
+  [307,574] 6.2. Noise Robustness and Stability Analysis
+  [67,592] • Exploration via Low IS (ProsQA): On ProsQA (Fig-ure 2), the Latent CoT model maintains IS < 0.6. Thisempirically confirms Theorem 4.5. The persistentlylow IS indicates that the model retains multiple poten-tial reasoning trajectories in the latent space, prevent-ing premature convergence to a suboptimal solution.This mechanism supports the high accuracy (97.0%)observed in exploratory tasks.
+  [307,593] To validate error propagation (Theorem 4.8) and stabil-ity bounds (Theorem 4.11), we inject Gaussian noiseN(0, σ2Id) into the hidden states (Latent CoT) or pre-output states (CoT) and measure Exact Match accuracydegradation.
+  [307,658] The results in Figure 3 demonstrate two distinct failuremodes:
+  [67,695] • Absence of Discretization (GSM8K): On GSM8K(Figure 1), the model operates without high-probability
+  [319,695] • Explicit CoT (Step-Function Response): The Ex-plicit CoT accuracy curve remains flat for low noise
+  [296,732] 7
+
+======================================================================
+PAGE 8  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [307,69] mains relatively stable under noise. This suggests that thesolution space for exploratory tasks is continuous (small de-viations in hM still map to valid semantic outputs), whereascomputational tasks require hM to remain within a narrowregion to produce the correct numerical token.
+  [69,73] 1.0
+  [69,95] 0.8
+  [57,101] Accuracy Drop Rate
+  [69,118] 0.6
+  [69,140] 0.4
+  [307,142] 6.3. Ablation: Curriculum Learning
+  [307,161] We analyze the training stability of Latent CoT without cur-riculum (Table 1: 52.4% accuracy on ProntoQA). Monitor-ing the training process reveals that without the curriculum,the model converges to a high-IS regime in the early epochs.This creates a distributional mismatch: the model learnsa deterministic mapping based on input-output statisticsrather than the expert latent policy Pθ∗(Theorem 5.1). Thecurriculum is therefore necessary to enforce the distribu-tion alignment required for the emergence of the low-ISreasoning capability.
+  [69,162] 0.2
+  [105,171] Latent CoTCoT
+  [69,185] 0.0
+  [84,196] 102101100
+  [160,206] Noise Intensity
+  [55,227] Figure 3. Performance Degradation under Noise. Standard CoT(orange) shows a threshold effect: performance is constant until σexceeds the decision margin. Latent CoT (blue) shows monotonicdecay starting from σ ≈0. This aligns with the derivation A(σ) =Φ(∆l√
+  [73,268] Cσ ) in Appendix A.7.
+  [69,286] 1.0
+  [307,296] 7. Conclusion
+  [69,300] 0.9
+  [69,313] 0.8
+  [57,315] Accuracy Drop Rate
+  [307,317] In this work, we introduced the Symbolic Index as a unify-ing theoretical framework to explain the fundamental trade-off between exploration and execution in language modelreasoning. Our analysis identifies decisional certainty asthe governing mechanism: Explicit CoT’s high certaintysecures computational fidelity through error-correcting dis-cretization but limits exploration via premature commitment,whereas Latent CoT’s low certainty facilitates broad searchat the cost of symbolic integrity due to compounding errors.We further proved that curriculum learning is a theoreticalnecessity for Latent CoT, ensuring convergence by bridgingthe distributional mismatch that otherwise traps models insuboptimal policies.
+  [69,327] 0.7
+  [69,341] 0.6
+  [69,355] 0.5
+  [69,368] 0.4
+  [69,382] 0.3
+  [105,385] GSM8KProsQA
+  [69,396] 0.2
+  [84,410] 102101100
+  [160,420] Noise Intensity
+  [55,441] Figure 4. Task-Dependent Sensitivity. Latent CoT retains higher
+  [56,451] performance on ProsQA (orange) compared to GSM8K (blue)under identical noise levels. This indicates that exploratory taskshave a larger tolerance for state deviation than precise computa-tional tasks.
+  [307,478] While the Symbolic Index currently serves as a diagnosticmetric, it reveals a critical limitation in current paradigmdesigns: the rigidity of decisional certainty. Our frame-work suggests that the advancement of reasoning architec-tures requires moving beyond the binary choice betweendiscrete and continuous modalities. Instead, future researchshould prioritize adaptive systems capable of dynamicallyregulating their decisional certainty—modulating betweenhigh-certainty commitment for precise execution and low-certainty diversification for planning. By establishing deci-sional certainty as a central design principle, this work laysthe foundation for developing agents that can fluently transi-tion between rigorous calculation and flexible explorationbased on task demands.
+  [75,514] levels before exhibiting a sharp decline. This confirmsthe presence of a non-zero Logit Decision Margin ∆l.For noise vectors ∥ϵ∥< ∆l, the discrete projection (to-ken selection) effectively filters the perturbation (The-orem 4.7).
+  [67,584] • Latent CoT (Continuous Decay): Latent CoT ex-hibits immediate, monotonic degradation. This con-firms that ∆l ≈0 in the continuous latent representa-tion. Without a discrete margin, perturbations directlyalter the state trajectory. The rate of decay on GSM8Ksupports Theorem 4.8, indicating that the transitionfunction fθ accumulates error over the reasoning stepsM = 6.
+  [307,660] Impact Statement
+  [307,681] This paper presents work whose goal is to advance the fieldof Machine Learning. There are many potential societalconsequences of our work, none which we feel must be
+  [55,696] Figure 4 shows that robustness depends on the task domain.While GSM8K performance degrades rapidly, ProsQA re-
+  [296,732] 8
+
+======================================================================
+PAGE 9  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [307,69] Hao, S., Sukhbaatar, S., Su, D., Li, X., Hu, Z., Weston,
+  [55,69] specifically highlighted here.
+  [317,81] J., and Tian, Y.Training large language models toreason in a continuous latent space.arXiv preprintarXiv:2412.06769, 2024a.
+  [55,96] References
+  [55,116] Abbasi-yadkori, Y., P´al, D., and Szepesv´ari, C. Improved
+  [307,125] Hao, S., Sukhbaatar, S., Su, D., Li, X., Hu, Z., Weston, J.,
+  [65,128] algorithms for linear stochastic bandits. In Shawe-Taylor,J., Zemel, R., Bartlett, P., Pereira, F., and Weinberger,K. (eds.), Advances in Neural Information ProcessingSystems, volume 24. Curran Associates, Inc., 2011.
+  [317,137] and Tian, Y. Training large language models to reason ina continuous latent space, 2024b.
+  [307,168] Herel, D. and Mikolov, T. Thinking tokens for language
+  [317,180] modeling. arXiv preprint arXiv:2405.08644, 2024.
+  [55,182] Chen, H., Feng, Y., Liu, Z., Yao, W., Prabhakar, A., Hei-
+  [65,194] necke, S., Ho, R., Mui, P., Savarese, S., Xiong, C., et al.Language models are hidden reasoners: Unlocking latentreasoning capabilities via self-rewarding. arXiv preprintarXiv:2411.04282, 2024.
+  [307,199] Hong, J., Zhen, T., Chen, K., Liu, J., Zhu, W., Huo, J.,
+  [317,211] Gao, Y., Wang, D., Wan, H., Yang, X., et al. Reconsider-ing overthinking: Penalizing internal and external redun-dancy in cot reasoning. arXiv preprint arXiv:2508.02178,2025.
+  [55,249] Cheng, J. and Van Durme, B. Compressed chain of thought:
+  [65,260] Efficient reasoning through dense representations. arXivpreprint arXiv:2412.13171, 2024.
+  [307,266] Hou, Y., Li, J., Fei, Y., Stolfo, A., Zhou, W., Zeng, G.,
+  [317,278] Bosselut, A., and Sachan, M. Towards a mechanisticinterpretation of multi-step reasoning capabilities of lan-guage models. arXiv preprint arXiv:2310.14491, 2023.
+  [55,291] Cobbe, K., Kosaraju, V., Bavarian, M., Chen, M., Jun, H.,
+  [65,303] Kaiser, L., Plappert, M., Tworek, J., Hilton, J., Nakano,R., Hesse, C., and Schulman, J. Training verifiers to solvemath word problems, 2021. URL https://arxiv.org/abs/2110.14168.
+  [307,321] Kong, D., Zhao, M., Xu, D., Pang, B., Wang, S., Honig, E.,
+  [317,333] Si, Z., Li, C., Xie, J., Xie, S., et al. Scalable languagemodels with posterior inference of latent thought vectors.arXiv preprint arXiv:2502.01567, 2025.
+  [55,357] DeepSeek-AI. Deepseek-v3.1 model card. Hugging Face
+  [65,369] model card, 2025. Hybrid thinking/non-thinking infer-ence, improved tool use and agent tasks, long-contextextension (128 K), FP8 format.
+  [307,376] Liu, J., Qiu, Z., Li, Z., Dai, Q., Zhu, J., Hu, M., Yang, M.,
+  [317,388] and King, I. A survey of personalized large languagemodels: Progress and future directions. arXiv preprintarXiv:2502.11528, 2025.
+  [55,412] Deng, Y., Prasad, K., Fernandez, R., Smolensky, P., Chaud-
+  [65,424] hary, V., and Shieber, S.Implicit chain of thoughtreasoning via knowledge distillation.arXiv preprintarXiv:2311.01460, 2023.
+  [307,432] Liu, T., Chen, Z., Liu, Z., Tian, M., and Luo, W.Ex-pediting and elevating large language model reasoningvia hidden chain-of-thought decoding. arXiv preprintarXiv:2409.08561, 2024.
+  [55,466] Deng, Y., Choi, Y., and Shieber, S. From explicit cot to
+  [65,478] implicit cot: Learning to internalize cot step by step.arXiv preprint arXiv:2405.14838, 2024.
+  [307,487] Ma, X., Wan, G., Yu, R., Fang, G., and Wang, X. Cot-valve:
+  [317,499] Length-compressible chain-of-thought tuning.arXivpreprint arXiv:2502.09601, 2025.
+  [55,509] Emmons, S., Jenner, E., Elson, D. K., Saurous, R. A., Raja-
+  [65,521] manoharan, S., Chen, H., Shafkat, I., and Shah, R. Whenchain of thought is necessary, language models struggle toevade monitors. arXiv preprint arXiv:2507.05246, 2025.
+  [307,530] Mohtashami, A., Pagliardini, M., and Jaggi, M.CoT-Former: A chain of thought driven architecture withbudget-adaptive computation cost at inference. In TheThirteenth International Conference on Learning Repre-
+  [55,563] Goyal, S., Ji, Z., Rawat, A. S., Menon, A. K., Kumar, S., and
+  [65,575] Nagarajan, V. Think before you speak: Training languagemodels with pause tokens. In The Twelfth InternationalConference on Learning Representations, 2024.
+  [317,578] sentations, 2025.
+  [307,597] OpenAI.Introducinggpt-5.https://openai.com/index/introducing-gpt-5/,2025.Accessed: 2025-08-29.
+  [55,617] Gozeten, H. A., Ildiz, M. E., Zhang, X., Harutyunyan, H.,
+  [65,629] Rawat, A. S., and Oymak, S. Continuous chain of thoughtenables parallel exploration and reasoning. arXiv preprintarXiv:2505.23648, 2025.
+  [307,640] Orlicki, J. I.Beyond words:A latent memory ap-proach to internal reasoning in llms.arXiv preprintarXiv:2502.21030, 2025.
+  [55,672] Guo, D., Yang, D., Zhang, H., Song, J., Zhang, R., Xu, R.,
+  [65,684] Zhu, Q., Ma, S., Wang, P., Bi, X., et al. Deepseek-r1: In-centivizing reasoning capability in llms via reinforcementlearning. arXiv preprint arXiv:2501.12948, 2025.
+  [307,684] Pfau, J., Merrill, W., and Bowman, S. R. Let’s think dot by
+  [317,696] dot: Hidden computation in transformer language models.In First Conference on Language Modeling, 2024.
+  [296,732] 9
+
+======================================================================
+PAGE 10  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [317,69] dynamic shortcuts. arXiv preprint arXiv:2505.18962,2025b.
+  [55,69] Ruan, Y., Band, N., Maddison, C. J., and Hashimoto, T.
+  [65,81] Reasoning to learn from latent thoughts. arXiv preprintarXiv:2503.18866, 2025.
+  [307,101] Wei, J., Wang, X., Schuurmans, D., Bosma, M., Xia, F., Chi,
+  [317,113] E., Le, Q. V., Zhou, D., et al. Chain-of-thought promptingelicits reasoning in large language models. Advances inneural information processing systems, 35:24824–24837,2022.
+  [55,114] Shen, X., Wang, Y., Shi, X., Wang, Y., Zhao, P., and Gu, J.
+  [65,125] Efficient reasoning with hidden thinking. arXiv preprintarXiv:2501.19201, 2025a.
+  [55,158] Shen, Z., Yan, H., Zhang, L., Hu, Z., Du, Y., and He, Y. Codi:
+  [307,168] Xu, G., Jin, P., Hao, L., Song, Y., Sun, L., and Yuan, L.
+  [65,170] Compressing chain-of-thought into continuous space viaself-distillation. arXiv preprint arXiv:2502.21074, 2025b.
+  [317,180] Llava-o1: Let vision language models reason step-by-step. arXiv preprint arXiv:2411.10440, 2024.
+  [55,202] Su, D., Zhu, H., Xu, Y., Jiao, J., Tian, Y., and Zheng,
+  [307,211] Xu, Y., Guo, X., Zeng, Z., and Miao, C. Softcot++: Test-
+  [65,214] Q. Token assorted: Mixing latent and text tokens forimproved language model reasoning.arXiv preprintarXiv:2502.03275, 2025.
+  [317,223] time scaling with soft chain-of-thought reasoning. arXivpreprint arXiv:2505.11484, 2025a.
+  [307,254] Xu, Y., Guo, X., Zeng, Z., and Miao, C. Softcot: Soft
+  [55,258] Sun, J., Zheng, C., Xie, E., Liu, Z., Chu, R., Qiu, J.,
+  [317,266] chain-of-thought for efficient reasoning with llms. arXivpreprint arXiv:2502.12134, 2025b.
+  [65,270] Xu, J., Ding, M., Li, H., Geng, M., et al.A surveyof reasoning with foundation models. arXiv preprintarXiv:2312.11562, 2023.
+  [307,297] Ye, J., Yao, Z., Huang, Z., Pan, L., Liu, J., Bai, Y., Xin,
+  [317,309] A., Weichuan, L., Che, X., Hou, L., et al. How doestransformer learn implicit reasoning?arXiv preprintarXiv:2505.23653, 2025.
+  [55,314] Sun, Y., Chen, Y., Li, Y., and Ding, B. Enhancing latent
+  [65,326] computation in transformers with latent tokens. arXivpreprint arXiv:2505.12629, 2025.
+  [307,353] Yu, P., Xu, J., Weston, J. E., and Kulikov, I. Distilling
+  [55,359] Tack, J., Lanchantin, J., Yu, J., Cohen, A., Kulikov, I.,
+  [317,364] system 2 into system 1. In The First Workshop on System-2 Reasoning at Scale, NeurIPS’24, 2024.
+  [65,370] Lan, J., Hao, S., Tian, Y., Weston, J., and Li, X. Llmpretraining with continuous concepts. arXiv preprintarXiv:2502.08524, 2025.
+  [307,396] Yu, Q., He, Z., Li, S., Zhou, X., Zhang, J., Xu, J., and He,
+  [317,408] D. Enhancing auto-regressive chain-of-thought throughloop-aligned reasoning. arXiv preprint arXiv:2502.08482,2025.
+  [55,415] Tan, W., Li, J., Ju, J., Luo, Z., Luan, J., and Song, R.
+  [65,427] Think silently, think fast: Dynamic latent compression ofllm reasoning chains. arXiv preprint arXiv:2505.16552,2025.
+  [307,451] Yue, L., Du, Y., Wang, Y., Gao, W., Yao, F., Wang, L., Liu,
+  [317,463] Y., Xu, Z., Liu, Q., Di, S., et al. Don’t overthink it: A
+  [55,471] Tishby, N. and Zaslavsky, N. Deep learning and the in-
+  [317,475] survey of efficient r1-style large reasoning models. arXivpreprint arXiv:2508.02120, 2025.
+  [65,482] formation bottleneck principle, 2015.URL https://arxiv.org/abs/1503.02406.
+  [307,506] Zelikman, E., Harik, G. R., Shao, Y., Jayasiri, V., Haber,
+  [55,515] Wang, J., Wu, Z., Lai, F., Lian, S., and Zeng, Z. Synadapt:
+  [317,518] N., and Goodman, N. Quiet-STar: Language modelscan teach themselves to think before speaking. In FirstConference on Language Modeling, 2024.
+  [65,527] Learning adaptive reasoning in large language modelsvia synthetic continuous chain-of-thought. arXiv preprintarXiv:2508.00574, 2025a.
+  [307,561] Zeng, B., Song, S., Huang, S., Wang, Y., Li, H., He, Z.,
+  [55,571] Wang, X., Wei, J., Schuurmans, D., Le, Q., Chi, E., Narang,
+  [317,573] Wang, X., Li, Z., and Lin, Z.Pretraining languagemodels to ponder in continuous space. arXiv preprintarXiv:2505.20674, 2025.
+  [65,583] S., Chowdhery, A., and Zhou, D. Self-consistency im-proves chain of thought reasoning in language mod-els, 2023. URL https://arxiv.org/abs/2203.11171.
+  [307,617] Zhang, J., Zhu, Y., Sun, M., Luo, Y., Qiao, S., Du, L., Zheng,
+  [317,629] D., Chen, H., and Zhang, N. Lightthinker: Thinking step-by-step compression. arXiv preprint arXiv:2502.15589,2025a.
+  [55,639] Wang, X., Caccia, L., Ostapenko, O., Yuan, X., Wang, W. Y.,
+  [65,651] and Sordoni, A. Guiding language model reasoning withplanning tokens. In First Conference on Language Mod-eling, 2024.
+  [307,672] Zhang, Z., He, X., Yan, W., Shen, A., Zhao, C., Wang, S.,
+  [317,684] Shen, Y., and Wang, X. E. Soft thinking: Unlocking thereasoning potential of llms in continuous concept space.arXiv preprint arXiv:2505.15778, 2025b.
+  [55,695] Wang, X., Wang, S., Zhu, Y., and Liu, B.System-1.5reasoning: Traversal in language and latent spaces with
+  [293,732] 10
+
+======================================================================
+PAGE 11  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [55,69] Zhu, H., Hao, S., Hu, Z., Jiao, J., Russell, S., and Tian,
+  [65,81] Y. Reasoning by superposition: A theoretical perspec-
+  [65,93] tive on chain of continuous thought.arXiv preprintarXiv:2505.12514, 2025.
+  [293,732] 11
+
+======================================================================
+PAGE 12  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [55,68] A. Appendix
+  [55,89] A.1. Experimental Details
+  [55,107] Models. Both CoT and Latent CoT (Coconut) models are based on the smallest GPT-2 variant with 124M parameters.For Latent CoT, we use M = 6 latent reasoning steps across all experiments. The latent thought vector hk has the samedimension as GPT-2’s hidden size (d = 768).
+  [55,149] Training. We use the Adam optimizer with learning rate 1e−4 and weight decay 0.01. Training is performed on 4 GPUswith mixed-precision (bfloat16 enabled for ProsQA, disabled for GSM8K due to stability). For GSM8K, we train for 25epochs with batch size 32 and gradient accumulation steps 1; for ProsQA, we train for 30 epochs with batch size 16 andgradient accumulation steps 2. The Coconut curriculum progresses stage-by-stage: for GSM8K, we use 3 epochs per stageup to latent stage 3 (i.e., compressing the first 3 CoT steps into latent thoughts); for ProsQA, we use 4 epochs per stage up tolatent stage 6 (full internalization). The base model checkpoint is initialized from standard GPT-2.
+  [55,227] Datasets. We evaluate on two reasoning benchmarks:
+  [63,254] 1. GSM8K: We use the standard split with a held-out test set of 330 examples. Training and validation use the officialtraining set (7,473 examples) and a 10% validation subset, respectively.
+  [63,288] 2. ProsQA: Following Hao et al. (2024b), we use a test set of 300 examples. The training and validation sets contain2,000 and 200 examples, respectively.
+  [55,327] All reported accuracies are computed on these test sets.
+  [55,345] Symbolic Index Visualization Details. The visualizations in Figures 1 and 2 are based on representative examples from therespective test sets.
+  [67,384] • Figure 1 (GSM8K): The plot was generated from the following math reasoning problem: ”Janet’s ducks lay 16 eggsper day. She eats three for breakfast every morning and bakes muffins for her friends every day with four. She sells theremainder at the farmers’ market daily for $2 per fresh duck egg. How much in dollars does she make every day at thefarmers’ market?”
+  [67,442] • Figure 2 (ProsQA): The plot was generated from the following logical reasoning problem: ”Every shumpus is ayumpus. Every worpus is a yimpus. Every shumpus is a gwompus. Every tumpus is a boompus. Every worpus is ashumpus. Every storpus is a terpus. Max is a yimpus. Every shumpus is a rompus. Every wumpus is a jelpus. Everyboompus is a terpus. Fae is a tumpus. Every tumpus is a worpus. Every rompus is a gorpus. Every timpus is a impus.Every jompus is a gerpus. Every boompus is a rompus. Fae is a boompus. Every boompus is a kerpus. Every zumpusis a bompus. Max is a rempus. Every rompus is a kerpus. Max is a impus. Every rempus is a impus. Every wumpus isa yumpus. Every grimpus is a terpus. Every tumpus is a jompus. Every yumpus is a felpus. Every jelpus is a felpus.Every shumpus is a felpus. Every rempus is a timpus. Every storpus is a jompus. Every rompus is a storpus. Everytumpus is a wumpus. Every wumpus is a jompus. Every boompus is a worpus. Fae is a storpus. Every worpus is ajelpus. Every grimpus is a felpus. Every worpus is a yumpus. Every rempus is a zumpus. Every kerpus is a grimpus. IsFae a gwompus or bompus?”
+  [55,588] Noise Injection Protocol. During inference, we inject Gaussian noise N(0, σ2Id) as follows:
+  [63,616] 1. For CoT: noise is added to the last hidden state before the LM head, i.e., h ←h + σ · ϵ, where ϵ ∼N(0, Id).
+  [63,638] 2. For Latent CoT: noise is added at every reasoning step, i.e., hk ←fθ(hk−1) + σ · ϵk, with independent ϵk ∼N(0, Id).
+  [55,665] We report accuracy as the exact-match rate on the test set. The ”accuracy drop ratio” in Figure 3 is defined as Acc(σ)/Acc(0).
+  [55,683] Reproducibility. All experiments use seed 0. Due to the deterministic nature of our evaluation protocol and the use ofnucleus sampling with fixed p = 0.95 for Symbolic Index estimation, results are fully reproducible given the same modelcheckpoint.
+  [293,732] 12
+
+======================================================================
+PAGE 13  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [55,69] A.2. Proof of Theorem 4.1
+  [55,84] Lemma A.1 (Loss and Mutual Information). Assume the decoder model family {pθ(S(k+1...M) | hk, X)} is well-specified,i.e., there exists a parameter θ∗such that pθ∗(S(k+1...M) | hk, X) = p(S(k+1...M) | hk, X) holds almost everywhere.Further assume H(S(k+1...M) | X) < ∞. Then,
+  [217,129] Coconut(θ) ⇐⇒maxp(hk|X) I(hk; S(k+1...M) | X).
+  [198,130] θL(k)
+  [192,133] min
+  [55,163] Proof. Expand the loss function:
+  [92,179] Coconut(θ) = Ep(X,S,hk)[−log pθ(S(k+1...M) | hk, X)]
+  [85,181] L(k)
+  [184,199] Ep(S(k+1...M)|X,hk)[−log pθ(S(k+1...M) | hk, X)]
+  [179,199] h
+  [382,199] i
+  [132,201] = Ep(X,hk)
+  [267,218] −log p(S(k+1...M) | hk, X) + log p(S(k+1...M) | hk, X)
+  [179,222] 
+  [261,222] 
+  [501,222] 
+  [132,227] = Ep(X,hk)
+  [185,227] Ep(S(k+1...M)|X,hk)
+  [407,233] pθ(S(k+1...M) | hk, X)
+  [184,250] H(S(k+1...M) | hk, X) + DKL(p(· | hk, X)∥pθ(· | hk, X))
+  [179,250] h
+  [420,250] i
+  [132,252] = Ep(X,hk)
+  [426,254] .
+  [55,275] By the well-specified assumption, there exists w∗such that DKL(p(· | hk, X)∥pθ(· | hk, X)) →0. Therefore,
+  [223,293] Coconut(θ) =minp(hk|X) H(S(k+1...M) | hk, X).
+  [204,294] θL(k)
+  [198,297] min
+  [55,322] By the definition of conditional mutual information, I(A; B | C) = H(A | C) −H(A | B, C), we have
+  [155,337] H(S(k+1...M) | hk, X) = H(S(k+1...M) | X) −I(hk; S(k+1...M) | X).
+  [55,357] Since H(S(k+1...M) | X) is constant, it follows that
+  [161,375] minp(hk|X) H(S(k+1...M) | hk, X) ⇐⇒maxp(hk|X) I(hk; S(k+1...M) | X).
+  [55,429] We now begin the proof of Theorem 4.1.
+  [55,450] Proof. By Lemma A.1, minimizing the Coconut loss is equivalent to minp(hk|X) H(S(k+1...M) | hk, X). Any physicallyrealizable encoder is constrained by finite model capacity, formally expressed as I(hk; S(1...k) | X) ≤R. We construct theLagrangian:
+  [145,489] J (p, λ) = H(S(k+1...M) | hk, X) + λ
+  [309,489] I(hk; S(1...k) | X) −R
+  [303,489] 
+  [403,489] 
+  [410,493] ,λ ≥0.
+  [55,513] Using the identity H(A | B, C) = H(A | C) −I(B; A | C), we rewrite:
+  [160,531] H(S(k+1...M) | X) −I(hk; S(k+1...M) | X)
+  [345,531] + λI(hk; S(1...k) | X) −λR.
+  [155,531] h
+  [338,531] i
+  [133,535] J =
+  [55,555] Ignoring constants H(S(k+1...M) | X) and λR during minimization over p(hk | X), we obtain:
+  [221,576] λI(hk; S(1...k) | X) −I(hk; S(k+1...M) | X)
+  [214,576] n
+  [402,576] o
+  [184,580] minp(hk|X)
+  [410,580] .
+  [55,606] Defining β = 1/λ > 0 and dividing through by λ, this becomes the standard CIB objective:
+  [221,624] I(hk; S(1...k) | X) −βI(hk; S(k+1...M) | X)
+  [214,624] n
+  [402,624] o
+  [184,628] minp(hk|X)
+  [410,628] .
+  [55,657] Denote Ipast = I(hk; S(1...k) | X) and Ifuture = I(hk; S(k+1...M) | X). Any Pareto-optimal encoder lies on the efficiencyfrontier of the information plane, where the trade-off between retained and predicted information satisfies the first-ordercondition:
+  [260,693] dIfuture
+  [303,693] =1β(k).
+  [262,707] dIpast
+  [291,711] h∗
+  [296,716] k
+  [293,732] 13
+
+======================================================================
+PAGE 14  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [55,69] We model the frontier as:
+  [312,78] 
+  [318,78] 1 −e−α(k)·Ipast,
+  [209,82] Ifuture(Ipast; k) = Imax(k)
+  [55,102] with parameters motivated by:
+  [55,122] Imax(k) ≈C2(M −k), proportional to the length of the remaining sequence.
+  [55,139] α(k) ≈1/H(S(1...k) | X) ≈1/(C1k+C0), inversely proportional to the information content of past tokens. Differentiatinggives:
+  [223,165] dIfuture
+  [254,170] = Imax(k) · α(k) · e−α(k)·Ipast.
+  [226,178] dIpast
+  [55,194] At optimality, the encoder saturates its bottleneck: Ipast ≈H(S(1...k) | X) ≈1/α(k). Substituting:
+  [239,219] ≈Imax(k) · α(k) · e−1 ≈C2(M −k)
+  [195,219] dIfuture
+  [346,226] e(C1k + C0).
+  [198,233] dIpast
+  [226,237] h∗
+  [231,242] k
+  [55,256] Applying β(k) = (dIfuture/dIpast)−1:
+  [367,281] 1M −k
+  [405,281] 
+  [180,281] β(k) = e · C1k + C0
+  [226,281] C2(M −k) = eC1
+  [309,281] ·kM −k + O
+  [414,288] .
+  [294,295] C2
+  [55,316] Thus, as k →M, the dominant asymptotic behavior is β(k) ∼kM−k, revealing that the optimal trade-off scales with theratio of processed to remaining sequence length.
+  [55,354] A.3. Proof of Theorem 4.3
+  [55,371] Lemma A.2 (Upper Bound on the Entropy H(pCoT) of the CoT Output Distribution). Let ¯p = E[pCoT] be the expectednext-step distribution over B options, drawn from a Dirichlet prior with parameters α and concentration κ = PB
+  [55,386] i=1 αi.Under high concentration — i.e., when αj ≫αi̸=j for some j — the entropy H(¯p) vanishes as κ grows. Specifically, ifαj = κ −(B −1)c and αi̸=j = c for small c > 0, then
+  [300,432] log κ
+  [330,432] 
+  [255,439] H(¯p) = O
+  [339,439] ,
+  [316,445] κ
+  [55,470] Proof. By properties of the Dirichlet distribution, the expected probabilities are given by ¯pi = αi/κ. We consider a typicalunimodal scenario in which the vast majority of the weight concentrates on a single option j. We set αj = κ −(B −1)cand αi̸=j = c for all i̸ = j, where c is a small positive constant.
+  [55,512] Under this setting, the expected probabilities are:
+  [228,533] ¯pj = κ −(B −1)c
+  [276,533] κ= 1 −(B −1)c
+  [355,547] κ
+  [219,555] ¯pi̸=j = c
+  [252,568] κ
+  [55,587] We compute the entropy of this distribution:
+  [242,608] X
+  [152,610] H(¯p) = −¯pj log ¯pj −
+  [258,610] ¯pi log ¯pi
+  [242,624] i̸=j
+  [425,632]  c
+  [196,636] 
+  [204,636] 1 −(B −1)cκ
+  [261,636] 
+  [284,636] 
+  [291,636] 1 −(B −1)cκ
+  [348,636] 
+  [358,636] −(B −1) c
+  [439,639] 
+  [176,643] = −
+  [270,643] log
+  [402,643] κ log
+  [432,650] κ
+  [55,671] We analyze the first term using the Taylor expansion log(1 −x) ≈−x. As κ →∞, we have (B−1)c
+  [439,674] κ→0, and thus:
+  [459,689]  1
+  [120,696] 
+  [127,696] 1 −(B −1)cκ
+  [184,696] 
+  [207,696] 
+  [215,696] 1 −(B −1)cκ
+  [271,696] 
+  [301,696] 
+  [309,696] 1 −(B −1)cκ
+  [366,696]  
+  [382,696] −(B −1)c
+  [429,696] 
+  [475,696] 
+  [110,703] −
+  [282,703] ≈−
+  [193,703] log
+  [439,703] = O
+  [484,703] .
+  [407,710] κ
+  [468,710] κ
+  [293,732] 14
+
+======================================================================
+PAGE 15  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [55,69] Next, we analyze the second term:
+  [217,79]  c
+  [152,83] −(B −1) c
+  [240,83] = −(B −1) c
+  [231,86] 
+  [292,90] κ(log c −log κ)
+  [194,90] κ log
+  [224,97] κ
+  [403,108] log κ
+  [433,108] 
+  [240,108] = (B −1)clog κ
+  [296,108] κ−(B −1)clog c
+  [367,115] κ= O
+  [442,115] .
+  [419,122] κ
+  [365,139] 
+  [390,139] 
+  [372,141] log κ
+  [513,141] log κ
+  [55,143] Combining both terms, as κ becomes large, the entropy is dominated by the O
+  [55,143] κ=0.
+  [398,143] term. And we have limκ→∞
+  [378,149] κ
+  [55,182] We now begin the proof of Theorem 4.3.
+  [55,206] Proof. We analyze the almost sure asymptotic behavior of DKL(qPR∥pCoT) under the concentrated Dirichlet prior whereαj = κ −(B −1)c and αi̸=j = c.
+  [55,236] By the law of large numbers for Dirichlet distributions, as κ →∞, the random vector pCoT converges almost surely to itsmean:
+  [270,257] 
+  [277,257] 1 −(B −1)cκ, c
+  [377,257] 
+  [339,257] κ, . . . , c
+  [229,260] a.s.−−→¯p =
+  [209,264] pCoT
+  [385,264] .
+  [370,271] κ
+  [55,291] Since the KL divergence is a continuous function of the probability vector (away from the boundary), we have:
+  [268,305] a.s.−−→DKL(qPR∥¯p)as κ →∞.
+  [203,308] DKL(qPR∥pCoT)
+  [55,332] Now compute DKL(qPR∥¯p):
+  [210,350] BX
+  [228,354] 1B log 1/B
+  [148,360] DKL(qPR∥¯p) =
+  [259,367] ¯pi
+  [211,374] i=1
+  [267,385] BX
+  [200,389] = −log B −1
+  [283,395] log ¯pi
+  [256,402] B
+  [267,409] i=1
+  [419,415]  c
+  [267,420] 
+  [286,420] 
+  [294,420] 1 −(B −1)cκ
+  [351,420] 
+  [433,420] 
+  [200,420] = −log B −1
+  [360,426] + (B −1) log
+  [272,426] log
+  [446,426] .
+  [256,433] B
+  [426,433] κ
+  [55,456] Using Taylor expansion log(1 −x) = −x + O(x2):
+  [312,467]  1
+  [238,474] 
+  [243,474] −(B −1)c
+  [332,474] 
+  [472,474] 
+  [119,474] DKL(qPR∥¯p) = −log B −1
+  [342,481] + (B −1) log c −(B −1) log κ
+  [268,481] κ+ O
+  [321,487] κ2
+  [227,488] B
+  [356,495]  1
+  [171,502] = B −1
+  [192,502] Blog κ −log B −(B −1) log c
+  [371,502] 
+  [302,509] B+ O
+  [380,509] .
+  [364,516] κ
+  [55,538] Therefore, almost surely as κ →∞:
+  [410,548]  1
+  [160,555] DKL(qPR∥pCoT) = B −1
+  [245,555] Blog κ −log B −(B −1) log c
+  [425,555] 
+  [356,562] B+ O
+  [434,562] .
+  [418,569] κ
+  [55,592] Since H(pCoT) →0 as established in Lemma A.2, and DKL(qPR∥pCoT) grows logarithmically in κ, this proves the explorationdeficiency of CoT.
+  [55,629] A.4. Proof of Theorem 4.5
+  [55,648] Assumption A.3 (Convergence and Compactness of Latent States). We assume that during inference, the sequence oflatent states {hk} converges to a fixed point or enters a compact attracting set as the reasoning step k increases. This isnot just a theoretical convenience; it is a behavior we consistently observe empirically. As shown in Figure 5, a PCAvisualization of the latent thought embeddings reveals a clear convergent trajectory, where successive states {L1, . . . , L6}move progressively closer within a bounded region. The high explained variance (0.99) of the first two principal componentsconfirms that this 2D projection faithfully represents the dynamics in the original high-dimensional space.
+  [293,732] 15
+
+======================================================================
+PAGE 16  (w=612 h=792)
+--- images (2):
+  IMG xref=589 at Rect(55.439998626708984, 67.05758666992188, 293.583984375, 304.9339904785156)
+  IMG xref=590 at Rect(303.2980041503906, 165.28912353515625, 541.4454345703125, 304.9339904785156)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [IMG-BLOCK bbox=(55.4, 67.1, 293.6, 304.9)]
+  [IMG-BLOCK bbox=(303.3, 165.3, 541.4, 304.9)]
+  [104,311] (a) PCA visualization on GSM8K task.
+  [352,311] (b) PCA visualization on ProsQA task.
+  [55,328] Figure 5. PCA visualization of latent state embeddings for reasoning trajectories. In both (a) and (b), the latent thoughts (L1-L6)
+  [55,338] demonstrate a clear convergence, supporting our assumption of a compact, attracting set for latent states. This validates that theconvergence dynamic is a general property of the latent reasoning process, not specific to a single task.
+  [55,380] Lemma A.4 (Non-Degenerate Output Distribution of Coconut). For a model trained via the Coconut objective, itsoptimization can be modeled as solving a Conditional Information Bottleneck (CIB) problem with a finite trade-offparameter β(k) > 0 (Theorem 4.1). Under this framework, the model’s output probability distribution is non-degenerate:there exists a constant δ > 0 such that for any valid next token u and any reachable latent state h, the probability is strictlybounded away from 1:
+  [246,438] 
+  [325,438] 
+  [253,445] maxu∈Nvalid(v) p(u | h)
+  [335,445] ≤1 −δ,
+  [227,445] suph∈H
+  [55,469] where H is the compact latent state space guaranteed by Assumption A.3.
+  [55,494] Proof. Assume, for contradiction, that suph∈H maxu p(u | h) = 1. Since H is compact and the decoder p(u | h) iscontinuous, there must exist a latent state h∗∈H and a token u∗such that p(u∗| h∗) = 1.
+  [55,520] At h∗, future uncertainty is fully eliminated: H(S(k+1...M) | h∗, X) = 0, implying that the predictive informationI(h; S(k+1...M) | X) achieves its theoretical maximum.
+  [54,554] By Theorem 4.1, the Coconut solution corresponds to an optimal solution of a CIB problem. On the information plane(Ipast, Ifuture), all optimal solutions must lie on the efficiency frontier, and any optimal point hopt must satisfy:
+  [258,587] dIfuture
+  [305,587] =1β(k).
+  [261,601] dIpast
+  [290,606] hopt
+  [55,629] At our hypothetical point h∗, Ifuture reaches its maximum value Imax(k). Under the efficiency frontier model adopted inTheorem 4.1:
+  [312,651] 
+  [318,651] 1 −e−α(k)·Ipast,
+  [209,655] Ifuture(Ipast; k) = Imax(k)
+  [55,675] which is strictly increasing and strictly concave in Ipast, with derivative:
+  [223,696] dIfuture
+  [254,701] = Imax(k) · α(k) · e−α(k)·Ipast.
+  [226,709] dIpast
+  [293,732] 16
+
+======================================================================
+PAGE 17  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [55,68] As Ifuture →Imax(k), we must have Ipast →∞, and the derivative →0+. If Ifuture were to reach Imax(k) at a finite Ipast (asat h∗), the derivative must be zero to match the asymptotic behavior. Thus, at h∗:
+  [268,104] dIfuture
+  [299,110] h∗= 0.
+  [271,117] dIpast
+  [55,138] If h∗were a CIB optimum, it must satisfy:
+  [260,153] dIfuture
+  [291,153] h∗=1β(k),
+  [263,166] dIpast
+  [55,186] implying 1/β(k) = 0, i.e., β(k) →∞. However, by Theorem 4.1, at any non-terminal stage of curriculum learning(k < M), β(k) is a finite positive constant (with asymptotic behavior β(k) ∼k/(M −k) < ∞), so 1/β(k) > 0. Thiscontradicts the requirement that the slope be zero.
+  [55,227] Therefore, the assumption p(u∗| h∗) = 1 leads to a contradiction. Hence, sup max p(u | h) must be strictly less than 1.The lemma is proved.
+  [55,258] Intuition: In essence, Coconut inherently avoids deterministic collapse by design: its information bottleneck objectiveenforces a trade-off that preserves output diversity, even at advanced reasoning stages.
+  [55,300] We now begin the proof of Theorem 4.5
+  [55,329] Proof. By Lemma A.4, there exists δ > 0 such that for any valid next token u and reachable state h, the probability satisfiesmaxu p(u | h) ≤1 −δ. Our goal is to derive an upper bound for the KL divergence DKL(qPR∥pCoconut).
+  [55,360] By definition,
+  [206,371] DKL(qPR∥p) = −log B −1
+  [325,376] X
+  [341,378] log p(u | v).
+  [314,385] B
+  [330,392] u
+  [55,400] To bound this quantity from above, we seek the probability distribution that maximizes DKL under the constraints P pi = 1and max pi ≤1 −δ, which is equivalent to minimizing P log p(u | v).
+  [55,429] The minimum of P log pi is achieved by the most concentrated distribution satisfying the constraint:
+  [174,459] p(u∗| v) = 1 −δ,and for all u̸ = u∗,p(u | v) =δB −1.
+  [55,493] Substituting this worst-case distribution into the KL divergence expression yields an upper bound:
+  [273,515] 
+  [382,515] δB −1
+  [417,515] 
+  [130,515] DKL(qPR∥pCoconut) ≤−log B −1
+  [278,521] log(1 −δ) + (B −1) log
+  [262,528] B
+  [206,542] = −B −1
+  [285,542] 
+  [290,542] log B −B −1
+  [335,542] Blog(B −1) + log(1 −δ)
+  [457,542] 
+  [234,549] Blog δ −
+  [464,549] .
+  [431,556] B
+  [256,579] Blog(B −1) + log(1−δ)
+  [55,580] Denote the bracketed term as f(B) = log B −B−1
+  [55,581] B. Since f(B) is continuous and bounded on[2, ∞) (with limB→∞f(B) = 0), its infimum c = infB≥2 f(B) is a finite constant. Therefore, −f(B) is upper-boundedby −c.
+  [55,622] Meanwhile, since B ≥2, we have B−1
+  [55,622] 2. Also, since δ ∈(0, 1), it follows that log δ < 0, and thus −B−1Blog δ ≤−1
+  [206,622] B≥1
+  [64,635] 2 log δ.
+  [55,653] Combining these bounds, the KL divergence admits a finite upper bound independent of the branching factor B:
+  [184,674] DKL(qPR∥pCoconut) ≤−B −1
+  [289,675] Blog δ −c ≤−1
+  [366,681] 2 log δ −c.
+  [293,732] 17
+
+======================================================================
+PAGE 18  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [55,69] A.5. Proof of Theorem 4.7
+  [55,85] Proof. We prove that under sub-decisional perturbations, the Explicit CoT trajectory ˆS is identical to the noise-free trajectoryS∗by induction on the reasoning step k.
+  [55,118] Let fθ(·) denote the deterministic forward pass of the model. At step k, the model takes the input x and the discrete historyS(1...k−1) to produce a logit vector l∗
+  [203,128] k = fθ(x, S(1...k−1)). The noise-free token selection is given by s∗
+  [473,128] k = argmax(l∗
+  [55,130] k).The perturbed process generates logits ˆlk = l∗
+  [237,142] k + ϵk, where ϵk satisfies the sub-decisional condition: argmax(l∗
+  [55,143] k + ϵk) =argmax(l∗
+  [95,155] k).
+  [55,173] At the first step, both the clean and perturbed processes receive the exact same input x (with an empty history). The cleanlogits are l∗
+  [98,182] 1 = fθ(x, ∅). The perturbed logits are ˆl1 = l∗1 + ϵ1. By the definition of sub-decisional perturbation:
+  [179,204] ˆs1 = argmax(ˆl1) = argmax(l∗
+  [302,204] 1 + ϵ1) = argmax(l∗1) = s∗1.
+  [55,227] Thus, the first token is identical, and the history passed to step 2 is error-free.
+  [55,243] Assume that for all steps t < k, the generated tokens are identical, i.e., ˆst = s∗
+  [55,245] t . This implies the discrete history is identical:ˆS(1...k−1) = S∗(1...k−1). At step k, since the model fθ is deterministic and conditioned strictly on the discrete history:
+  [179,274] Logitspre-noise = fθ(x, ˆS(1...k−1)) = fθ(x, S∗(1...k−1)) = l∗
+  [410,277] k.
+  [55,297] The noise process adds the perturbation: ˆlk = l∗
+  [55,299] k + ϵk. Applying the sub-decisional constraint again, the discrete projectionfilters out the noise:
+  [240,321] ˆsk = argmax(l∗
+  [302,321] k + ϵk) = s∗
+  [350,323] k.
+  [55,340] Consequently, the noise term ϵk is discarded by the argmax operator and does not propagate to the state of the next step.
+  [55,357] By induction, ˆsk = s∗
+  [140,358] k for all k = 1, . . . , M. Therefore, the probability of trajectory divergence is zero:
+  [266,377] P[ ˆS̸ = S∗] = 0.
+  [55,400] This mathematically confirms the discretization-reset mechanism described in Section 4.3: the argmax operator effectivelyacts as a non-linear filter that resets the internal state to a clean integer grid at every step, preventing the accumulation ofsub-decisional noise.
+  [55,449] A.6. Proof of Theorem 4.8
+  [55,468] Proof. From the recurrence
+  [321,478] k−1) + ϵ(k)
+  [227,479] Ek = fθ(hk−1) −fθ(h∗
+  [356,481] h ,
+  [55,498] taking the squared norm and expectation, and using the independence and zero-mean property of the noise (which causescross terms to vanish), we obtain:
+  [225,520] E[∥Ek∥2] ≤L2
+  [284,520] F E[∥Ek−1∥2] + dσ2
+  [364,522] h.
+  [55,537] This is a non-homogeneous linear recurrence. Solving it with initial condition E[∥E0∥2] = 0 yields:
+  [267,558] 
+  [277,558] 1 −L2MF1 −L2F
+  [317,564] · dσ2h,LF̸ = 1,
+  [211,572] E[∥EM∥2] =
+  [276,587] M · dσ2
+  [267,588] 
+  [304,588] h,LF = 1.
+  [55,608] In both cases, E[∥EM∥2] > 0 for all M ≥1, which completes the proof.
+  [55,635] A.7. Derivation of the Normalized Accuracy Function
+  [55,653] In this section, we provide a rigorous derivation of the Normalized Accuracy curve A(σ) to explain the characteristicinverted S-shape (sigmoid-like) degradation observed in Figure 3. We model the causal chain from injected noise in thelatent space to the probabilistic failure of token ranking in the output space.
+  [55,694] We begin by modeling the accumulation of noise in the hidden states. Let h∗
+  [55,695] M denote the clean latent state at the finalreasoning step M. Consistent with Theorem 4.8 (Compounding Error), the injection of Gaussian noise ϵ ∼N(0, σ2Id) at
+  [293,732] 18
+
+======================================================================
+PAGE 19  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [55,69] each step accumulates over the reasoning trajectory. Assuming a linearized approximation of the transition dynamics, thefinal perturbed state ˜hM can be expressed as:
+  [200,99] ˜hM = h∗
+  [234,100] M + ϵacc,whereϵacc ∼N(0, σ2
+  [373,102] effId).
+  [55,119] eff ≈α · σ2 scales linearly with theinjection variance σ2, where the scaling factor α depends on the path length M and the Lipschitz constant of the network.
+  [55,121] Here, ϵacc represents the effective accumulated noise vector in Rd. The variance σ2
+  [55,153] Since discrete token decisions are not made in the latent space but in the logit space, we must trace how this perturbationpropagates through the unembedding layer. Let WU ∈R|V|×d be the weight matrix of the language model head. Theperturbed logits ˜l are obtained by projecting the final latent state:
+  [215,195] ˜l = WU˜hM = WU(h∗
+  [301,196] M + ϵacc) = l∗+ η,
+  [55,217] where l∗denotes the clean logits, and η = WUϵacc represents the noise projected into the logit space. Since ϵacc is Gaussianand WU is a linear transformation, η follows a multivariate Gaussian distribution over R|V|.
+  [55,247] A prediction is successful if the noise is insufficient to alter the ranking of the top tokens. Let i∗= argmax(l∗) be the indexof the correct token, and let j∗be the index of the strongest competitor. The model retains the correct prediction if ˜li∗> ˜lj∗.Substituting ˜l = l∗+ η, this condition becomes:
+  [198,292] l∗
+  [201,292] i∗+ ηi∗> l∗
+  [250,292] j∗+ ηj∗=⇒ηj∗−ηi∗< l∗
+  [365,292] i∗−l∗
+  [387,294] j∗.
+  [55,315] Crucially, the Right-Hand Side is precisely the Logit Decision Margin ∆l defined in Definition 4.10. Therefore, the successcondition simplifies to:
+  [230,339] ξ < ∆l,whereξ = ηj∗−ηi∗.
+  [55,362] To quantify the probability of this event, we analyze the distribution of the random variable ξ. We express ξ as a linearcombination of the accumulated noise vector: ξ = (wj∗−wi∗)⊤ϵacc. Because ϵacc is isotropic Gaussian, ξ ∼N(0, σ2
+  [55,374] 1).The scalar variance σ2
+  [141,387] 1 is given by:σ2
+  [252,396] 1 = ∥wj∗−wi∗∥22 · σ2eff.
+  [174,408] 2, we derive the relationship σ21 = C · σ2. Thus, σ1 =√
+  [55,415] Letting C = α · ∥wj∗−wi∗∥2
+  [400,417] C · σ.
+  [55,432] The Normalized Accuracy A(σ) is defined as the probability of success P(ξ < ∆l). We evaluate this using the CDF of thestandard normal distribution, Φ(z). By standardizing via Z = ξ/σ1 ∼N(0, 1), we obtain:
+  [250,465] A(σ) = P(ξ < ∆l)
+  [292,475]  ξ
+  [339,483] 
+  [315,483] < ∆l
+  [274,487] = P
+  [301,496] σ1
+  [327,496] σ1
+  [294,510] ∆l√
+  [333,510] 
+  [274,517] = Φ
+  [342,517] .(4)
+  [310,525] C · σ
+  [55,549] This derivation provides a rigorous physical interpretation for the experimental results. In the limit as σ →0, the argument
+  [57,560] ∆l√
+  [55,561] Cσ →∞, and A(σ) →1. This explains the “sub-decisional plateau,” where accuracy remains stable because the noiseis strictly contained within the safety margin ∆l. As σ increases, the argument decreases, leading to the characteristicsigmoid-like decay observed in the accuracy curve. This confirms that robustness is analytically determined by the ratiobetween the Symbolic Index-induced margin ∆l and the accumulated noise variance.
+  [55,624] A.8. Proof of Theorem 4.11
+  [55,642] Proof. The Logit Decision Margin ∆l is defined as the difference between the logits of the most and second-most likelytokens, ∆l = li∗−lj∗. We aim to establish a lower bound for this quantity based on the Symbolic Index, IS.
+  [55,671] First, we relate the logits to probabilities using the softmax function, pi = eli/ P
+  [55,671] k elk. The ratio of the probabilities of thetop two tokens is:
+  [238,695] pi∗pj∗= eli∗
+  [267,701] elj∗= eli∗−lj∗= e∆l.
+  [293,732] 19
+
+======================================================================
+PAGE 20  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [55,69] By taking the natural logarithm of both sides, we can express the logit margin in terms of probabilities:
+  [245,87] ∆l = log(pi∗) −log(pj∗).
+  [55,105] By the definition of the Symbolic Index, the probability of the most likely token is pi∗= IS.
+  [55,123] Next, we establish an upper bound for the probability of the second-most likely token, pj∗. The sum of probabilities over allpossible tokens is 1. Therefore, the sum of probabilities of all tokens except the most likely one is 1 −pi∗= 1 −IS. Sincepj∗is the largest among these remaining probabilities, it cannot be greater than their sum. Thus, we have the inequality:
+  [270,165] pj∗≤1 −IS.
+  [55,183] Because the logarithm function is monotonically increasing, this implies log(pj∗) ≤log(1 −IS). Consequently, its negative,−log(pj∗), satisfies the reverse inequality: −log(pj∗) ≥−log(1 −IS).
+  [55,213] Finally, we substitute our findings back into the equation for ∆l:
+  [195,231] ∆l = log(IS) −log(pj∗) ≥log(IS) −log(1 −IS).
+  [55,249] Using the properties of logarithms, we arrive at the desired lower bound:
+  [294,265] IS1 −IS
+  [330,265] 
+  [255,272] ∆l ≥log
+  [339,272] .
+  [55,321] A.9. Proof of Theorem 4.12
+  [55,339] Proof. The KL divergence between the ideal uniform prior qPR (where qi = 1/B for all i = 1, . . . , B) and the model’soutput distribution p is given by:
+  [196,368] BX
+  [275,368] BX
+  [422,368] BX
+  [236,372] qi
+  [254,372] 
+  [317,372] 1/B
+  [345,372] 
+  [292,372] 1B log
+  [355,372] = −log B −1
+  [133,378] DKL(qPR∥p) =
+  [212,378] qi log
+  [264,378] =
+  [438,378] log pi.
+  [244,385] pi
+  [331,385] pi
+  [411,385] B
+  [197,393] i=1
+  [275,393] i=1
+  [423,393] i=1
+  [55,405] To find a lower bound for DKL(qPR∥p), we must find an upper bound for the term PB
+  [55,408] i=1 log pi, subject to the constraintsimposed by the model’s distribution. The constraints are:
+  [63,440] 1. PBi=1 pi = 1
+  [63,461] 2. maxi pi = IS
+  [55,484] We want to solve the following optimization problem:
+  [219,501] BX
+  [291,509] X
+  [307,511] pi = 1 and max pi = IS.
+  [188,511] maxp1,...,pB
+  [235,511] log pis.t.
+  [220,525] i=1
+  [55,538] Let pi∗= IS be the maximal probability. The sum of the remaining B −1 probabilities is P
+  [55,538] k̸=i∗pk = 1 −IS. Thefunction f(p1, . . . , pB−1) = P
+  [55,550] k̸=i∗log pk is concave. By Jensen’s inequality, this sum is maximized when the remainingprobabilities are distributed as uniformly as possible, i.e., when pk = 1−IS
+  [335,563] B−1 for all k̸ = i∗.
+  [55,582] This distribution, which makes the probabilities as ”flat” as possible given the peak at IS, provides the maximum possiblevalue for P log pi. Substituting this extremal distribution, we find the upper bound:
+  [212,612] BX
+  [356,615] 1 −IS
+  [393,615] 
+  [228,622] log pi = log(IS) + (B −1) log
+  [192,622] max
+  [402,622] .
+  [366,629] B −1
+  [213,636] i=1
+  [55,649] Now, we substitute this upper bound back into the expression for the KL divergence. Since we are subtracting this term, itsupper bound yields a lower bound for the KL divergence:
+  [282,677] 
+  [380,677] 1 −IS
+  [416,677] 
+  [164,677] DKL(qPR∥p) ≥−log B −1
+  [288,684] log(IS) + (B −1) log
+  [430,684] .
+  [389,691] B −1
+  [272,691] B
+  [55,708] This completes the proof.
+  [293,732] 20
+
+======================================================================
+PAGE 21  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [55,69] A.10. Proof of Theorem 5.1
+  [55,88] Proof. We prove this by constructing a counterexample. We define a reasoning task where the biased training distributionhas a strictly lower success rate than the expert. We then show that the Maximum Likelihood Estimator (MLE) converges toa policy that mimics this suboptimal behavior, leading to a permanent performance gap.
+  [55,137] 1. Instance ConstructionConsider a d = 3 dimensional latent space with three discrete states:
+  [67,163] • hexpert: The correct reasoning path. Feature ϕ(hexpert) = [1, 0, 0]⊤.
+  [67,184] • hshortcut: A superficial shortcut. Feature ϕ(hshortcut) = [0, 1, 1]⊤.
+  [67,206] • hbad: Irrelevant noise. Feature ϕ(hbad) = [0, 1, 0]⊤.
+  [55,234] The valuation function V (h) (correctness of the answer derived from h) is defined as:
+  [278,256] (
+  [286,259] 1if h = hexpert0otherwise
+  [243,266] V (h) =
+  [55,297] The Task Success Rate for a policy parameterized by θ is thus R(θ) = Pθ(hexpert).
+  [55,322] 2. The Expert vs. The Biased DistributionLet the expert parameter be θ∗= [10, 0, 0]⊤. The unnormalized log-probability (score) for the expert state is 10, while others are 0. The expert’s success rate is:
+  [236,356] R(θ∗) =e10
+  [276,364] e10 + e0 + e0 ≈1.0.
+  [55,390] Now, consider the biased data distribution Pbiased.Assume the dataset consists entirely of shortcut reasoning, i.e.,Pbiased(hshortcut) = 1. The success rate of this data distribution is:
+  [194,422] R(Pbiased) = Eh∼Pbiased[V (h)] = 1 · V (hshortcut) = 0.
+  [55,446] This satisfies the theorem’s condition R(Pbiased) ≤R(θ∗) −∆with gap ∆≈1.
+  [55,471] 3. MLE Convergence and the Performance GapWe train a model ˆθMLE on this biased dataset. MLE maximizesthe log-likelihood of the observed data (hshortcut). To maximize the score ⟨θ, ϕ(hshortcut)⟩= θ2 + θ3, while adhering tonormalization constraints, the optimizer will drive θ2 + θ3 →∞.
+  [55,513] A characteristic solution for large N is ˆθMLE ≈[0, K, K]⊤for a large K. Under this learned policy, the probability massshifts entirely to the shortcut:
+  [199,537] PˆθMLE(hshortcut) ∝e2K,PˆθMLE(hexpert) ∝e0 = 1.
+  [55,560] The success rate of the learned model is:
+  [189,578] R(ˆθMLE) = PˆθMLE(hexpert) =11 + e2K + eKK→∞−−−−→0.
+  [55,618] 4. ConclusionComparing the final success rates:
+  [232,638] R(ˆθMLE) ≈0vs.R(θ∗) ≈1.
+  [55,663] Thus, we have derived the bound:
+  [250,674] R(ˆθMLE) ≤R(θ∗) −C,
+  [55,695] where C ≈1 is a strictly positive constant derived from the initial gap ∆. This proves that without a curriculum to correctthe distributional bias, the model’s performance is permanently bounded away from optimality.
+  [293,732] 21
+
+======================================================================
+PAGE 22  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [55,69] A.11. Proof of Theorem 5.2
+  [55,88] Justification for the Imitation Learning FrameworkOur theoretical analysis, particularly Theorem 5.2, models thetraining process within the standard framework of Imitation Learning (IL). This framework assumes access to an i.i.d.dataset of input-latent state pairs Dc = {(xi, hi)}n
+  [55,112] i=1 sampled from an expert latent policy Pθ∗(h|x). However, the Coconuttraining paradigm is supervised on predicting future tokens from expert trajectories DS = {(xi, S∗
+  [457,122] i )}n
+  [55,124] i=1. This sectionprovides a formal justification for the equivalence between training a Coconut model and performing Maximum LikelihoodEstimation (MLE) in this IL setting.
+  [55,166] The core argument is as follows:
+  [63,193] 1. Definition of the Implicit Expert Latent Policy: By Theorem 4.1 (Coconut-CIB Duality), the objective of Coconuttraining is to learn an encoder Eθ such that the latent state hk = Eθ(S(1...k)) becomes a Minimal Sufficient Statisticof the past S(1...k) for predicting the future S(k+1...M). Let Eθ∗be the optimal encoder that solves this CIB problem.We can define an implicit expert latent policy Pθ∗(h|x) as the distribution induced by applying the optimal encoderto the distribution of expert trajectory prefixes:
+  [172,261] h ∼Pθ∗(h|x)whereh = Eθ∗(S∗
+  [318,261] past) and S∗
+  [359,263] past ∼Pexpert(Spast|x).
+  [75,285] The support of this policy, Pθ∗(h|x), constitutes the space of ideal latent states.
+  [63,305] 2. Equivalence of the Optimization Process: The Coconut objective is to minimize the expected negative log-likelihood:
+  [203,325] θL(θ) = E(x,S∗)∼Pexpert[−log p(S∗
+  [343,325] future|Eθ(S∗
+  [197,327] min
+  [385,327] past), x)].
+  [75,353] By the Data Processing Inequality, for any encoder Eθ, we have:
+  [224,373] I(S∗
+  [239,373] past; S∗
+  [261,373] future|x) ≥I(Eθ(S∗
+  [335,373] past); S∗
+  [361,375] future|x).
+  [75,397] The optimal encoder Eθ∗achieves equality, as it preserves all predictive information. This implies that the conditionaldistribution factorizes as p(S∗
+  [75,407] future|h∗, x). Therefore, the loss L(θ)effectively measures the divergence in predictive power between the latent distribution induced by Eθ and the ideallatent distribution Pθ∗(h|x). The loss is minimized if and only if the induced latent distribution pθ(h|x) converges toPθ∗(h|x).
+  [196,407] future|S∗
+  [222,407] past, x) = p(S∗
+  [280,407] future|Eθ∗(S∗
+  [326,407] past), x) = p(S∗
+  [55,472] Conclusion: The Coconut training process, while formally supervised on future token generation, has an intrinsic CIBobjective that compels the distribution of latent states generated by the encoder, pθ(h|x), to fit the implicit expert latent policyPθ∗(h|x). Consequently, minimizing the Coconut loss on the expert trajectory dataset DS is mathematically equivalent toperforming MLE on an implicit dataset Dc constructed from h∗
+  [310,506] i = Eθ∗(S∗
+  [55,508] i,past). This provides a rigorous foundation forapplying our IL-based theoretical guarantees to the Coconut model.
+  [55,534] Lemma A.5 (Self-Normalized Bound for Vector Martingales ((Abbasi-yadkori et al., 2011))). Let {Fi}n
+  [55,536] i=0 be a filtration.Let {gi}n
+  [55,544] i=1 be a sequence of random vectors in Rd such that gi is Fi-measurable and E[gi | Fi−1] = 0. Assume thereexists a constant σ > 0 such that for any unit vector v ∈Rd, the real-valued random variable ⟨v, gi⟩is conditionallyσ-sub-Gaussian, i.e.,
+  [363,581] λ2σ2
+  [393,582] 
+  [192,587] ∀λ ∈R,E[exp(λ⟨v, gi⟩) | Fi−1] ≤exp
+  [402,589] .
+  [379,596] 2
+  [55,612] Let V be a d × d positive definite matrix. Define
+  [259,632] nX
+  [356,632] nX
+  [275,640] gig⊤
+  [214,642] Vn = V +
+  [288,642] iandGn =
+  [372,642] gi.
+  [259,656] i=1
+  [357,656] i=1
+  [55,673] Then, for any δ ∈(0, 1), with probability at least 1 −δ, the following inequality holds:
+  [282,692] det(Vn)1/2 det(V )−1/2
+  [387,696] 
+  [226,699] n≤2σ2 log
+  [198,701] ∥Gn∥2
+  [396,703] .
+  [221,707] V −1
+  [336,710] δ
+  [293,732] 22
+
+======================================================================
+PAGE 23  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [55,67] Lemma A.6 (Construction of a Confidence Set for Parameter Estimation). Let ˆθMLE be the parameter estimate obtained bymaximizing the log-likelihood function on a curriculum dataset Dc = {(xi, hi)}n
+  [55,81] i=1, where the data is sampled i.i.d. fromthe expert distribution Pθ∗:
+  [295,103] nX
+  [226,110] ˆθMLE = arg max
+  [311,113] log Pθ(hi | xi)
+  [275,121] θ∈Rd
+  [296,127] i=1
+  [55,137] Assume the following regularity conditions for the log-linear model hold:
+  [63,160] 1. (Bounded Features): For all (x, h), ∥ϕ(x, h)∥2 ≤L.
+  [63,176] 2. (Strong Convexity): The expected negative log-likelihood function L(θ) = Ex,h∼Pθ∗[−log Pθ(h|x)] is λmin-stronglyconvex with respect to θ over the parameter space. Its Hessian (the Fisher information matrix) ∇2L(θ) = I(θ) satisfiesI(θ) ⪰λminI.
+  [63,219] 3. (Sub-Gaussian Score): The score function at the true parameter θ∗, ∇θ log Pθ∗(h | x), is a zero-mean, σ2-sub-Gaussian random vector.
+  [63,247] 4. (Bounded Parameters): ∥θ∗∥2 ≤B, and the optimization is performed within the compact set B = {θ ∈Rd : ∥θ∥2 ≤B}.
+  [55,285] Then for any δ ∈(0, 1), there exists a constant C > 0 (depending only on L, σ, λmin, B) such that with probability at least1 −δ, the true expert parameter θ∗satisfies:ˆθMLE −θ∗
+  [300,313] 2
+  [300,318] ˆHn ≤β2
+  [331,320] n(δ)
+  [55,341] where:
+  [111,361] Pn
+  [122,361] i=1 ∇2(−log PˆθMLE(hi | xi)) is the empirical Hessian evaluated at ˆθMLE,
+  [67,361] • ˆHn = 1n
+  [67,383] • β2n(δ) = C · d log(n)+log(1/δ)
+  [157,385] nis the squared radius of the confidence set.
+  [238,408] 
+  [379,408] 
+  [330,408] 2
+  [283,410] θ −ˆθMLE
+  [245,411] θ ∈Rd :
+  [55,412] In other words, the confidence set Θ(ˆθMLE) =
+  [389,413] covers the true parameter θ∗with high
+  [330,413] ˆHn ≤β2
+  [361,415] n(δ)
+  [55,432] probability.
+  [55,456] Proof. This proof combines the first-order optimality condition, concentration inequalities, and self-normalized analysistechniques to construct a non-asymptotic, high-probability bound.
+  [267,489] Pn
+  [55,491] 1. Notation and Basic RelationsLet Ln(θ) = 1
+  [55,492] i=1 ℓi(θ) be the empirical negative log-likelihood, where ℓi(θ) =−log Pθ(hi|xi). By definition, ˆθMLE is the minimizer of Ln(θ) within the parameter space B. Since θ∗is the minimizer ofthe expected risk L(θ) (because the KL divergence DKL(Pθ∗∥Pθ) = L(θ) −L(θ∗) is non-negative), we have ∇L(θ∗) = 0.
+  [259,498] n
+  [55,540] 2. Using Optimality and ConvexityBy the optimality of ˆθMLE, we have Ln(ˆθMLE) ≤Ln(θ∗). Since Ln(θ) is a convexfunction, we can derive a basic inequality that connects the parameter error to an empirical process:
+  [143,570] L(ˆθMLE) −L(θ∗) ≤L(ˆθMLE) −L(θ∗) −(Ln(ˆθMLE) −Ln(θ∗))
+  [217,587] = (L −Ln)(ˆθMLE) −(L −Ln)(θ∗)
+  [237,604] nX
+  [217,607] = 1
+  [253,610] 
+  [354,610] 
+  [259,611] E[ℓi(ˆθMLE)] −ℓi(ˆθMLE)
+  [362,612] −(E[ℓi(θ∗)] −ℓi(θ∗))
+  [228,621] n
+  [238,628] i=1
+  [55,640] By Assumption 2, L(θ) is λmin-strongly convex, so L(ˆθMLE) −L(θ∗) ≥λmin
+  [55,640] 2 ∥ˆθMLE −θ∗∥22. Combining this with the aboveinequality yields:
+  [183,665] λmin
+  [190,669] 2∥ˆθMLE −θ∗∥2
+  [290,670] |(L −Ln)(θ) −(L −Ln)(θ∗)|
+  [255,671] 2 ≤supθ∈B
+  [511,694] p
+  [55,695] Bounding the empirical process on the right-hand side can yield a preliminary L2-norm convergence bound of O(
+  [55,695] d/n).However, to obtain a sharper, weighted-norm bound, we turn to self-normalized analysis.
+  [293,732] 23
+
+======================================================================
+PAGE 24  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [55,69] 3. Applying Self-Normalized BoundsWe directly analyze the error relation derived from the first-order condition. Let∆= ˆθMLE −θ∗. A first-order Taylor expansion of ∇Ln(ˆθMLE) = 0 around θ∗gives:
+  [180,96] 0 = ∇Ln(ˆθMLE) = ∇Ln(θ∗) +Z 1
+  [315,106] 0∇2Ln(θ∗+ t∆)dt · ∆
+  [55,132] Rearranging, we get:
+  [258,141] ¯Hn∆= −∇Ln(θ∗)(5)
+  [109,156] R 1
+  [114,159] 0 ∇2Ln(θ∗+ t∆)dt is the mean Hessian matrix on the line segment between θ∗and ˆθMLE.
+  [55,159] where ¯Hn =
+  [55,178] The core of the analysis lies in bounding the norm of the empirical score ∇Ln(θ∗).Let gi= ∇θℓi(θ∗) =∇θ(−log Pθ∗(hi|xi)). Since E[gi|Fi−1] = ∇L(θ∗) = 0, the sequence {gi}n
+  [55,192] i=1 is a vector-valued martingale differ-ence sequence. Under our regularity conditions (specifically, Assumption 3), {gi} is also conditionally sub-Gaussian. Wecan therefore apply the self-normalized bound from Lemma A.5.
+  [55,233] Let’s map the variables to Lemma A.5: we set V = λI for some small regularization constant λ > 0, which ensures initialpositive definiteness. Then we have Gn = Pn
+  [242,243] i=1 gi and Vn = λI + Pn
+  [345,244] i=1 gig⊤
+  [55,245] i . Applying the lemma, we get that withprobability at least 1 −δ:
+  [291,273] det(λI + P gig⊤
+  [177,275] 2
+  [366,277] i )1/2 det(λI)−1/2
+  [147,277] nX
+  [443,280] 
+  [249,283] ≤2σ2 log
+  [163,287] gi
+  [452,287] .
+  [369,294] δ
+  [148,301] i=1
+  [177,302] (λI+Pn
+  [203,302] i=1 gig⊤
+  [227,302] i )−1
+  [55,318] Under the bounded feature assumption, we can bound the determinant term and simplify the expression. Using the fact thatP gig⊤
+  [80,328] i ≈n · E[gg⊤] = n · I(θ∗) and properties of the determinant, one can derive that:
+  [305,347] 2
+  [276,350] nX
+  [208,353] (I(θ∗))−1 = 1
+  [343,353] ≲d log(n) + log(1/δ)
+  [160,358] ∥∇Ln(θ∗)∥2
+  [292,360] gi
+  [392,360] n(6)
+  [257,366] n2
+  [277,374] i=1
+  [305,375] (I(θ∗))−1
+  [55,388] where ≲hides logarithmic factors and constants dependent on model parameters.
+  [55,412] 4. Connecting the Error and Gradient BoundsReturning to Eq. (5), we have ∆= −¯H−1
+  [55,413] n ∇Ln(θ∗). We want to bound∥∆∥2
+  [74,425] ˆHn. By matrix concentration inequalities and Assumptions 1 and 4, it can be shown that the empirical Hessian ∇2Ln(θ)
+  [55,440] concentrates uniformly around its expectation I(θ) over the parameter space B. This implies that both ¯Hn and ˆHn are closeto I(θ∗) with high probability. Formally, there exists ϵn →0 such that, with high probability, ∥¯Hn −I(θ∗)∥op ≤ϵn and∥ˆHn −I(θ∗)∥op ≤ϵn. Therefore, we can approximate:
+  [223,486] ˆHn = ∆⊤ˆHn∆
+  [205,487] ∥∆∥2
+  [238,505] = (∇Ln(θ∗))⊤¯H−1
+  [309,505] nˆHn ¯H−1
+  [343,506] n ∇Ln(θ∗)
+  [238,522] ≈(∇Ln(θ∗))⊤(I(θ∗))−1∇Ln(θ∗)
+  [238,538] = ∥∇Ln(θ∗)∥2
+  [296,545] (I(θ∗))−1
+  [55,559] n≈(I(θ∗))−1 and controlling the error terms, combined withEq. (6), it can ultimately be shown that:
+  [55,560] By more rigorously handling the approximation ¯H−1
+  [255,560] nˆHn ¯H−1
+  [263,592] ˆHn ≤C · d log(n) + log(1/δ)
+  [263,592] 2
+  [210,595] ˆθMLE −θ∗
+  [342,606] n
+  [55,622] where the constant C absorbs all terms dependent on L, σ, λmin, B. This completes the proof of the lemma.
+  [55,647] We can now prove the main theorem of this section.
+  [55,671] Proof. The proof proceeds in three steps: first, we leverage Lemma A.6 to bound the KL divergence between the modeldistribution Pˆθ and the expert distribution Pθ∗; second, we convert the KL divergence bound into a Total Variation (TV)distance bound using Pinsker’s inequality; finally, we use the properties of TV distance to bound the difference in tasksuccess rates between the two policies.
+  [293,732] 24
+
+======================================================================
+PAGE 25  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [55,69] 1. Bounding the KL DivergenceWe aim to bound the KL divergence DKL(Pθ∗∥Pˆθ). For the log-linear model familywe consider, the KL divergence has the form:
+  [161,102] DKL(Pθ∗(·|x)∥Pˆθ(·|x)) = Eh∼Pθ∗(·|x)[log Pθ∗(h|x) −log Pˆθ(h|x)]
+  [55,125] Performing a second-order Taylor expansion of log Pˆθ(h|x) around θ∗, we have:
+  [139,148] log Pˆθ(h|x) ≈log Pθ∗(h|x) + ⟨∇θ log Pθ∗(h|x), ∆⟩+ 1
+  [363,153] 2∆⊤∇2θ log Pθ∗(h|x)∆
+  [55,180] where ∆= ˆθ −θ∗. Substituting this into the KL divergence expression and taking the expectation, we note thatEh∼Pθ∗[∇θ log Pθ∗] = 0, which yields the quadratic approximation of KL divergence in terms of the Fisher informationmatrix:
+  [183,215] Ex∼ρ[DKL(Pθ∗∥Pˆθ)] ≈1
+  [285,215] 2∆⊤I(θ∗)∆= 12∥ˆθ −θ∗∥2I(θ∗)
+  [55,244] More rigorously, this approximation can be shown to hold with controllable higher-order terms. Since Lemma A.6 showsthat ∥ˆθ −θ∗∥ˆHn is small with high probability and ˆHn concentrates around I(θ∗), we can translate the result of Lemma A.6into a bound on the KL divergence. With probability at least 1 −δ:
+  [317,289] ˆHn ≤C · d log n + log(1/δ)
+  [162,291] Ex∼ρ[DKL(Pθ∗∥Pˆθ)] ≤C′ · ∥ˆθ −θ∗∥2
+  [393,296] n(7)
+  [55,318] where C′ and C are positive constants.
+  [55,347] 2. From KL Divergence to Total Variation DistanceThe Total Variation (TV) distance is defined as TV (P, Q) =12R
+  [72,359] |p(x) −q(x)|dx. Pinsker’s inequality establishes a relationship between KL divergence and TV distance:
+  [293,382] r
+  [304,384] 12DKL(P∥Q)
+  [237,390] TV (P, Q) ≤
+  [55,417] Applying this inequality to our model and expert distributions, and combining it with Eq. (7), we obtain a high-probabilitybound on the TV distance:
+  [264,448] "r
+  [347,448] #
+  [281,451] 12DKL(Pθ∗∥Pˆθ)
+  [146,456] Ex∼ρ[TV (Pθ∗∥Pˆθ)] ≤Ex∼ρ
+  [240,482] r
+  [252,484] 12Ex∼ρ[DKL(Pθ∗∥Pˆθ)](by Jensen’s inequality)
+  [230,491] ≤
+  [240,511] r
+  [252,513] C
+  [253,513] 2 · d log n + log(1/δ)n
+  [230,519] ≤
+  [250,538]  r
+  [346,538] !
+  [269,542] d log n + log(1/δ)
+  [230,548] = O
+  [530,549] (8)
+  [304,555] n
+  [55,585] 3. From Total Variation Distance to Task Success RateA key property of the TV distance is that it bounds the differencein expectation for any bounded function. Our task success function V (h) ∈{0, 1} is a bounded function (with bound 1).Therefore,
+  [135,629] |SuccessRate(ˆθ) −SuccessRate(θ∗)| =
+  [296,630] Ex∼ρ,h∼Pˆθ[V (h)] −Ex∼ρ,h∼Pθ∗[V (h)]
+  [296,646] Ex∼ρ
+  [327,646] Eh∼Pˆθ[V (h)] −Eh∼Pθ∗[V (h)]
+  [452,647] 
+  [323,647] 
+  [285,648] =
+  [285,662] ≤Ex∼ρ
+  [319,662] Eh∼Pˆθ[V (h)] −Eh∼Pθ∗[V (h)]
+  [285,678] ≤Ex∼ρ[ sup
+  [345,679] |Pˆθ(H′) −Pθ∗(H′)|]
+  [321,691] H′⊆H
+  [285,702] = Ex∼ρ[TV (Pθ∗∥Pˆθ)](9)
+  [293,732] 25
+
+======================================================================
+PAGE 26  (w=612 h=792)
+  [172,47] Capabilities and Fundamental Limits of Latent Chain-of-Thought
+  [55,69] Substituting the bound from Eq. (8) into Eq. (9), we finally obtain the bound on the difference in success rates:
+  [332,90]  r
+  [427,90] !
+  [351,93] d log n + log(1/δ)
+  [162,97] |SuccessRate(ˆθ) −SuccessRate(θ∗)| ≤O
+  [386,107] n
+  [55,130] Since we are concerned with the lower bound on the success rate, this is equivalent to:
+  [329,151]  r
+  [425,151] !
+  [348,154] d log n + log(1/δ)
+  [164,158] SuccessRate(ˆθ) ≥SuccessRate(θ∗) −O
+  [383,167] n
+  [55,191] This result shows that, under curriculum training, the task success rate of the learned policy converges to that of the expertpolicy with high probability, at a rate of O(
+  [228,201] p
+  [238,203] (d log n)/n). This completes the proof.
+  [293,732] 26

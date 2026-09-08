@@ -1,0 +1,1186 @@
+
+======================================================================
+PAGE 1  (w=612 h=792)
+  [182,100] ELF: Embedded Language Flows
+  [183,144] Keya Hu*Linlu Qiu*Yiyang LuHanhong ZhaoTianhong LiYoon KimJacob AndreasKaiming He
+  [208,176] MIT*Equal contribution; order decided by a coin flip.Code: https://github.com/lillian039/ELF
+  [11,224] arXiv:2605.10938v2  [cs.CL]  26 Jun 2026
+  [284,241] Abstract
+  [143,260] Diffusion and flow-based models have become the de facto approaches for gener-ating continuous data, e.g., in domains such as images and videos. Their successhas attracted growing interest in applying them to language modeling. Unlike theirimage-domain counterparts, today’s leading diffusion language models (DLMs)primarily operate over discrete tokens. In this paper, we show that continuousDLMs can be made effective with minimal adaptation to the discrete domain.We propose Embedded Language Flows (ELF), a class of diffusion models incontinuous embedding space based on continuous-time Flow Matching. Unlikeexisting DLMs, ELF predominantly stays within the continuous embedding spaceuntil the final time step, where it maps to discrete tokens using a shared-weightnetwork. This formulation makes it straightforward to adapt established techniquesfrom image-domain diffusion models, e.g., classifier-free guidance (CFG). Experi-ments show that ELF substantially outperforms leading discrete and continuousDLMs, achieving better generation quality with fewer sampling steps. These resultssuggest that ELF offers a promising path toward effective continuous DLMs.
+  [131,445] 1024 steps
+  [273,448] w/o distillw/ distill
+  [311,448] Figure 1: ELF achieves lower generative per-plexity with fewer sampling steps than priorDLMs, without using distillation. ELF achievesthis while using 10× fewer training tokens.(Model size: 105M for ELF and 170M for others;dataset: OWT. Detailed comparison in Fig. 7.)
+  [115,451] 100
+  [167,459] 1024 steps
+  [118,462] 80
+  [108,467] Gen. PPL 
+  [143,467] 32 steps
+  [204,467] 1024 steps
+  [118,473] 60
+  [180,476] 32 steps
+  [217,476] 32 steps1024 steps32 steps
+  [118,483] 40
+  [118,494] 20
+  [121,505] MDLMDuoFLMLangFlowELF0
+  [108,534] 1Introduction
+  [108,558] Diffusion models [72, 73, 30] and flow-based models [42, 43, 3] have become prominent paradigmsfor generating continuous data, demonstrating strong performance at synthesizing images, videos,and data in other continuous domains. These advances have driven growing interest in extendingdiffusion methods to language modeling, leading to extensive work on diffusion language models(DLMs). DLMs are commonly formulated in one of two ways: continuous or discrete. ContinuousDLMs map discrete tokens into continuous representations and perform denoising in the resultingcontinuous space [39, 15, 21]. Discrete DLMs, in contrast, operate directly in token space andformulate a probabilistic diffusion model over discrete random variables [5, 27, 45, 63, 64]. Recentprogress in DLMs has been mostly in the discrete regime, in large part due to the stronger empiricalperformance of discrete DLMs [38, 54, 85, 65]. But it remains an open question whether the currentperformance gap of continuous DLMs is due to the inherently discrete nature of language modelingor to underexplored algorithmic design choices.
+  [108,695] In this work, we introduce Embedded Language Flows (ELF), a class of continuous DLMs basedon Flow Matching [42, 43, 3]. ELF is continuous in two senses. First, it operates in continuous
+  [108,734] Preprint.
+  --- layout: single
+
+======================================================================
+PAGE 2  (w=612 h=792)
+  [142,80] t = 0.00t = 0.25t = 0.50t = 0.99t = 1.00
+  [436,95] cat
+  [416,125] dogbird
+  [108,156] Figure 2: Conceptual illustration of ELF. Orange points denote data represented in continuousembedding space, and purple lines show denoising trajectories from Gaussian noise to clean embed-dings. Discretization is applied only at the final time step (t = 1) using a shared-weight network.
+  [108,201] embedding space by directly denoising continuous representations throughout the flowing process,with discretization considered only at the final time step. Second, it is formulated with continuoustime, following Flow Matching [42, 43, 3], which allows us to define the velocity field via the timederivative. This formulation enables ELF to benefit from advances in Flow Matching, which is nowwidely used to instantiate diffusion models in image and video generation [48, 16, 7, 79].
+  [108,261] Following Latent Diffusion Models (LDM) [61], ELF constructs the continuous embedding space byapplying an encoder model to the input discrete tokens. The encoder can be pretrained, jointly trained,or frozen with random weights. Unlike latent diffusion, ELF does not require a separate decoder andthus introduces no additional component at inference time. This design is based on the observationthat the final time step in Flow Matching can be naturally repurposed to map continuous embeddingsback to discrete tokens, eliminating the need for an explicit decoder. As such, a shared-weightnetwork is trained to perform denoising at all but the final step, and decoding (i.e. discretization) atthe final step (see Fig. 2).
+  [107,354] ELF builds on prior continuous DLMs, but aims for a minimalist design that addresses the interfacebetween continuous and discrete spaces. In contrast to pioneering works on continuous DLMs [39,15, 21] and many others that employ a per-step discretization loss (e.g., cross-entropy), ELF performsdenoising in continuous embedding space at nearly all steps, thereby offering maximal flexibility forthe flow dynamics. And unlike latent diffusion methods [46, 50, 70], which typically operate in acompressed latent space and rely on a separate decoder, ELF directly operates in a high-dimensionallatent space [37] and requires no extra decoder.
+  [108,436] Empirically, we show that ELF outperforms leading methods on discrete DLMs and existing contin-uous DLMs (Fig. 1), following the evaluation protocols established in those works. ELF achievesbetter generation quality with fewer sampling steps than leading discrete DLMs (e.g., MDLM [63]and Duo [64]) and concurrent continuous DLMs (e.g., FLM [35] and LangFlow [11]). Moreover,ELF achieves this performance using 10× fewer training tokens and without any distillation. Wefurther show that ELF performs strongly on machine translation [8] and summarization [52]. Overall,these results suggest that continuous DLMs can be highly competitive while requiring only minimaltreatment of discretization, offering a promising direction for diffusion-based language modeling.
+  [108,539] 2Background & Related Work
+  [108,563] Diffusion-/Flow-based models.Diffusion models [72, 30, 73] and flow-based models [42, 43, 2]transform noise into data through ordinary or stochastic differential equations (ODEs/SDEs). InDDPM-style formulations, generation is defined by transitions between successive states [72, 30, 53],which may be discrete or continuous. Discrete states require categorical transition distributions, as indiscrete DLMs [5, 63]; continuous states are commonly modeled through score or noise predictionunder Gaussian corruption [73, 30, 16]. Flow Matching extends this view to continuous time bylearning the velocity field along a continuous path [42, 43, 2], where noise, data, and velocitypredictions can be reparameterized into one another [16, 37]. Our method adopts Flow Matching toformulate language generation in continuous embedding space and continuous time.
+  [108,669] Continuous diffusion language models.Continuous DLMs map discrete tokens to a continuousspace to perform denoising. Embedding-space methods, such as Diffusion-LM [39], CDCD [15],and DiffuSeq [21], add Gaussian noise directly to token embeddings [75, 88, 24, 81, 86, 41, 83, 17],with later work such as FlowSeq [31] replacing the diffusion process with Flow Matching in thesame embedding space. A complementary direction studies simplex-based representations, including
+  [304,742] 2
+  --- layout: single
+
+======================================================================
+PAGE 3  (w=612 h=792)
+  IMG xref=1521 at Rect(427.84228515625, 96.13916778564453, 444.5693359375, 104.26509094238281) saved=page03_img01.png
+  IMG xref=1522 at Rect(451.459716796875, 95.94908905029297, 465.09796142578125, 104.21756744384766) saved=page03_img02.png
+  [289,65] Ǟǘ
+  [238,65] ǜ
+  [384,66] ǜ
+  [179,77] input tokens
+  [189,77] Ǘ1
+  [143,85] Ǘǒ....Ǘ2Training
+  [208,91] corruptembed
+  [328,91] ELF network
+  [IMG-BLOCK bbox=(451.5, 95.9, 465.1, 104.2)]
+  [IMG-BLOCK bbox=(427.8, 96.1, 444.6, 104.3)]
+  [236,96] or....
+  [289,97] ........
+  [238,111] Ǟǘ
+  [322,111] Ǟǘ+1
+  [437,123] output tokens
+  [448,123] Ǘ1
+  [190,129] Ǟ0
+  [448,131] Ǘǒ....Ǘ2
+  [416,136] unembed
+  [274,137] ELFdenoiser
+  [386,137] ELF(t=1)
+  [143,137] ....Sampling
+  [238,143] ....
+  [182,149] ( gaussian )
+  [108,173] Figure 3: During training, discrete tokens are encoded into clean embeddings x and corruptedto zt, which ELF uses to predict ˆx. The model is trained with either the denoising loss LMSE orthe token-wise cross-entropy loss LCE. During inference, ELF starts from Gaussian noise z0 anditeratively denoises embeddings from zt to zt+1. Only at the final step does ELF switch to decodingmode and project the final embeddings back to discrete tokens through an unembedding layer.
+  [108,239] SSD-LM [26] and TESS [49, 77], as well as related manifold-based formulations [32, 12] and analog-bit encodings that denoise continuous binary codes of tokens [6]. Although these methods providecontinuous relaxations of discrete tokens, their trajectories often remain tied to the discrete tokenspace through mechanisms such as simplex constraints, token-aligned bit encodings, and token-levelcross-entropy objectives. In contrast, ELF denoises entirely in continuous embedding space withoutper-step token-level supervision and discretizes only at the final step.
+  [108,310] Another line applies latent diffusion to frozen encoder representations, represented by LD4LG [46]and follow-up work [90, 67, 47, 50, 70], with recent work further learning the latent space jointlywith the diffusion model [51, 25]. Like many diffusion methods described above, these approachestypically follow DDPM-style or score-based formulations with DDPM noise schedules [30, 53], andadditionally rely on a separate decoder network to recover tokens, trained either in an independentstage or jointly with the diffusion model [51]. In contrast, ELF uses a continuous-time Flow Matchingformulation with a linear (rectified-flow) interpolant [42, 43, 2], and does not require a separatedecoder. This brings flow-based training and sampling into language diffusion, allowing ELF tobenefit from recent advances in Flow Matching.
+  [108,414] Several concurrent works also revisit continuous flow-based language modeling.DFM [57],CFM [62], FLM/FMLM [35], and LangFlow [11] all incorporate token-level cross-entropy su-pervision along the flow trajectory, though they differ in the continuous state space, including simplexspace, one-hot token encodings, and embedding space. Some of these methods further introducedistillation for few-step generation, such as distilled DFM/CFM and FMLM. In contrast, ELF keepsthe denoising trajectory entirely in an unrestricted continuous embedding space, applying token-levelsupervision only at the final decoding step. A more comprehensive survey is provided in Appendix A.
+  [108,497] Discrete diffusion language models.Due to the discrete nature of language, another line of workapplies diffusion directly in token space. D3PMs [5] define general discrete corruption processes,including absorbing and uniform transitions. Masked diffusion models, such as MDLMs [63], use aspecial [MASK] absorbing state and generate samples through iterative unmasking [27, 54, 85, 71].Subsequent work improves sampling and efficiency through remasking, adaptive inference [80, 82],and semi-autoregressive block diffusion, including E2D2 [4]. Uniform-state diffusion models, suchas Duo [64], instead diffuse tokens toward a uniform categorical distribution, enabling repeated tokenrevision during inference [64, 14, 65]. Recent studies further scale discrete DLMs and extend themto code and multimodal generation [23, 74, 84, 87, 36]. A related line of work bridges discrete andcontinuous diffusion by jointly denoising in both the discrete and continuous spaces [22, 91, 58,92]. Overall, discrete diffusion models currently remain the dominant paradigm in diffusion-basedlanguage modeling [38].
+  [108,644] 3Embedded Language Flows
+  [108,669] In this section, we present our flow-based formulation for language modeling (Fig. 3). Our methodleverages the iterative nature of flow models to perform denoising primarily in continuous embeddingspace, converting clean embeddings back to discrete tokens only at the final step. Following priorwork [63, 64, 35, 11], we describe our method in the simpler setting of unconditional generation. Theframework can be extended to conditional generation, as discussed in Sec. 3.3.
+  [304,742] 3
+  --- layout: single
+
+======================================================================
+PAGE 4  (w=612 h=792)
+  [108,74] 3.1The ELF Framework
+  [108,94] From discrete tokens to continuous embeddings.To apply continuous diffusion to language,we first map discrete tokens to continuous representations. Given a sentence, we tokenize it intoa sequence of tokens s = [s1, . . . , sL] ∈V L, where each si is drawn from the vocabulary Vand L denotes the sequence length. We then map the discrete token sequence into a continuousembedding space. The choice of the embedding method is flexible. By default, we use a pretrainedT5 encoder [60] for bidirectional contextual embeddings. We also explore other jointly trained andrandomized embeddings (see Sec. 4.1). The encoder is only used during training, which does notincur additional modules at inference.
+  [108,190] Flow Matching on continuous embeddings.After obtaining continuous language representations,we formulate the denoising process in the resulting embedding space using Flow Matching [42, 43, 3].Flow Matching defines a continuous flow path from noise to data in this space. Let x ∼pdata(x)denote the embedding distribution and ϵ ∼pnoise(ϵ) denote the noise distribution (e.g., ϵ ∼N(0, I)).The noisy latent variable is defined by linear interpolation (“rectified flows”): zt = tx + (1 −t)ϵ,where t ∈[0, 1], and z0 ∼pnoise and z1 ∼pdata. In continuous time, the flow velocity v is defined asthe time derivative of z, that is, v = dz/dt = x −ϵ.
+  [108,271] While standard Flow Matching directly parameterizes v via a neural network, ELF follows recentadvances on image generation and instead parameterizes x [37] (x-prediction). Specifically, letxθ = netθ(zt, t) denote the network’s immediate output. We train the model by minimizing themean squared error (MSE) between the predicted velocity and the target velocity:
+  [335,321] 1(1 −t)2 ∥xθ(zt, t) −x∥2,(1)
+  [171,324] LMSE = Et,x,ϵ∥vθ(zt, t) −v∥2 = Et,x,ϵ
+  [108,353] where we leverage the relation v(zt, t) = (x −zt)/(1 −t) [37].
+  [108,369] The x-prediction parameterization is important for ELF. First, it enables Flow Matching to performeffectively on high-dimensional representations (e.g., 768-d per-token embeddings), consistent withobservations in [37] (see Appendix D.1 for ELF’s ablations on prediction targets). Second, predictingclean embeddings (i.e., x) aligns naturally with the objective of predicting clean discrete tokens at thefinal step (discussed next), whereas the standard v-prediction in Flow Matching does not. Althoughv can be predicted by a network and transformed into x, the weight sharing that ties the denoising(MSE loss) and decoding (cross-entropy loss) objectives is compromised. Empirically, we observethat v-prediction works poorly when weights are shared with the final discretization step.
+  [108,465] Back to discrete tokens.As the generation output consists of discrete tokens, we convert the cleanembeddings back into tokens at the final time step (i.e., at t = 1). By considering the final time stepof ELF naturally as continuous-to-discrete decoding, our method does not require a separate decoder(or equivalently, it can be thought of as a decoder sharing weights with the denoiser).
+  [108,513] The network input at this time step should be zt in the limit t →1. But because zt →x as t →1,we introduce a token-level corruption process at this final step to create a nontrivial training input,denoted as ˜z (detailed in Appendix C.1). The same network netθ maps ˜z to a clean embeddingxθ(˜z), which is subsequently projected by a learnable “unembedding” matrix W to obtain logits. Weminimize a per-token cross-entropy (CE) loss against the ground-truth token s:
+  [235,573] LCE = E˜z [CrossEnt(Wxθ(˜z), s)] ,(2)
+  [108,594] The network xθ shares weights with that in Eq. (1) and is conditioned on a binary “mode” token(denoise or decode) in addition to the time condition t = 1. At inference time, we evaluate Wxθ(zt)only at the final step t = 1, and apply argmax to obtain a discrete token.
+  [108,641] 3.2Pseudocode
+  [108,661] The core concepts of ELF are summarized in Alg. 1 and Alg. 2 (detailed in Appendix Fig. 10).
+  [108,680] Training.As in standard Flow Matching, ELF employs a single network netθ to model all timesteps, conditioned on t. This includes the final time step t = 1, which uses different pre-processing(corruption) and post-processing (loss computation). For clarity, we illustrate this distinction usingan explicit “if” branch in Alg. 1. In practice, samples from both branches are processed within a
+  [304,742] 4
+  --- layout: single
+
+======================================================================
+PAGE 5  (w=612 h=792)
+  [108,86] Algorithm 1 ELF: training.
+  [311,86] Algorithm 2 ELF: inference.
+  [108,99] Two-branch computation is batched, adding no extra training cost.
+  [311,99] We show ODE for simplicity. SDE sampler is also applicable.
+  [108,117] # net(z, t, mode): ELF network# s: a sequence of discrete tokens
+  [311,117] # shape: shape of embedded sequences# ts: sampling time schedule, from 0 to 1
+  [108,143] x = encode(s)if uniform(0, 1) < threshold:
+  [311,143] z = randn(shape)for i in range(len(ts) - 1):
+  [108,161] # denoising brancht = sample_t()e = randn_like(x)z = t * x + (1 - t) * ev = x - ex_pred = net(z, t, mode="denoise")v_pred = (x_pred - z) / (1 - t)loss = mse_loss(v_pred, v)else:
+  [327,161] t = ts[i]dt = ts[i + 1] - ts[i]x_pred = net(z, t, mode="denoise")
+  [327,197] # convert x prediction to velocityv = (x_pred - z) / (1 - t)z = z + dt * v
+  [311,232] # final steph = net(z, t=1, mode="decode")
+  [123,241] # decoding branch (t = 1)z = corrupt(x)x_pred = net(z, t=1, mode="decode")s_pred = unembed(x_pred)loss = ce_loss(s_pred, s)
+  [311,259] # unembeddingtoken_logits = unembed(h)tokens = argmax(token_logits)
+  [107,306] single batch, and masking is used to selectively apply the appropriate corruption and unembeddingoperations as well as the corresponding loss terms. The network is further conditioned on a binary“mode” token that indicates whether the operation is “denoise” or “decode”.
+  [108,347] Inference.During inference, ELF iteratively transforms noisy samples into clean embeddings.Starting from z0 ∼N(0, I), ELF solves the ODE: dzt/dt = vθ(zt, t), which is approximated witha numerical (e.g., Euler) solver. At the final time step t = 1, we apply the network under the “decode”mode and perform unembedding and discretization.
+  [108,396] Besides the ODE formulation, our method also supports an SDE-inspired sampler. The underlyingSDE associated with Flow Matching can be derived following [48], where the dynamics can beinterpreted as injecting infinitesimal noise at each step. In practice, we adopt a simpler approximationto emulate this behavior: we inject small noise at each step while correspondingly shifting the timevariable t toward the noise regime (detailed in Appendix, Alg. 6). For brevity, we refer to the resultingSDE-inspired sampler as the “SDE” variant, while noting that it primarily captures the per-stepstochastic behavior. We experimentally compare the ODE formulation with this SDE variant.
+  [108,486] 3.3Conditioning and Guidance
+  [108,507] Controlling model generation is an important aspect of generative modeling. In image diffusionmodels, classifier-free guidance (CFG) [29] has been established as a highly effective technique forsteering the generated output.1 CFG also enables a trade-off between generation quality and diversity.Because CFG was originally formulated for continuous quantities (e.g., score functions or velocityfields), it is naturally applicable to ELF. This stands in contrast to discrete counterparts, where CFGremains largely unexplored and has been shown less effective [35, 57].
+  [108,577] In the absence of class labels, we employ self-conditioning [10] to construct the conditioning signalsrequired for CFG. Given that self-conditioning is already a standard component in DLMs [88, 15,75, 46, 49, 67, 68], incorporating CFG introduces only marginal computational overhead. In whatfollows, we first describe the self-conditioning used in ELF and then introduce CFG.
+  [108,629] Self-conditioning.In a standard Flow Matching model (i.e., without self-conditioning), a forwardpass at a given time step yields a single prediction. We denote this prediction by ˆx′ in our case,indicating that it corresponds to a prediction of the clean embedding x. During training, self-conditioning [10] performs a second forward pass, conditioned on ˆx′, which serves as an intermediateprediction. The output of the second pass, denoted as ˆx, can be written as ˆx = netθ(zt | ˆx′, t). Thisis implemented by concatenating [zt, ˆx′] as the network input [10]. During training, the model is
+  [108,703] 1CFG was historically introduced for class-conditional generation. However, the notion of a condition can be generalizedto other inputs, e.g., a text prompt. We use CFG in this broader sense, as our setting does not involve class labels.
+  [304,742] 5
+  --- layout: single
+
+======================================================================
+PAGE 6  (w=612 h=792)
+  [108,71] conditioned on ˆx′ with probability 50%, and uses a null condition 0 otherwise (see Appendix, Fig. 10for details). During inference, the model conditions on the prediction from the previous time step,thus introducing no extra forward passes for inference.
+  [108,109] The intermediate prediction ˆx′ serves as a condition for the network. As such, it can be treated as theconditioning signal c in the application of CFG, introduced next.
+  [108,141] CFG with self-conditioning.CFG [29] combines the unconditional and conditional predictionsthrough a linear extrapolation. Formally, given a conditioning signal c, CFG in Flow Matchingdefines a velocity field as vcfg(zt | c) = ωv(zt | c) + (1 −ω)v(zt | ∅), where ∅denotes theunconditional counterpart and ω is the guidance scale. As discussed, our conditioning signal c isobtained from self-conditioning. In its original form [29], CFG is applied at inference time, requiringtwo forward passes per step.
+  [108,212] To avoid inference-time overhead, we adopt training-time CFG techniques [9, 78, 18, 19] previouslydeveloped for image generation. These methods use a single network pass to model vcfg insteadof v (in our case, xcfg instead of x). Because ELF is formulated similarly to its image-generationcounterpart, adapting it to training-time CFG is straightforward, further illustrating the advantages ofour continuous-based formulation. The implementation details, following the form in [18, 19], are inAppendix (Alg. 3, 4, & 5).
+  [108,284] Extension to conditional generation.Thus far, we have presented our method in the setting ofunconditional generation, as in prior work [63, 64, 35, 11]. Our method can be naturally extended toconditional generation, in which outputs are conditioned on an input sequence (e.g., a prompt). Inthis setting, we prepend the clean embeddings of the conditioning sequence to the model input andpreserve them without corruption during both training and inference. The model can then conditionon them through self-attention.
+  [108,355] CFG remains applicable in the conditional setting. The conditioning c now consists of both theself-conditioning and the prefix clean embeddings; the unconditional counterpart is obtained byzeroing out c. Analogous to text-to-image generation [16], CFG is effective in controlling generationquality in our scenario, which can be viewed as “text-to-text” generation.
+  [108,414] 4Experiments
+  [108,438] Dataset and evaluation.For unconditional generation, we follow the experimental design usedin past work [63, 64, 35, 11]. We train on the OpenWebText (OWT) dataset [20], which has around9B tokens, and pack sequences to length L = 1024. For evaluation, we generate 1,000 samples andreport generative perplexity (Gen. PPL), i.e., the perplexity of generated samples under a pretrainedGPT-2 Large model [59]; together with average unigram entropy as a measure of sample diversity.2
+  [107,498] For conditional generation, we consider machine translation and summarization. For machinetranslation, we use the WMT14 German-to-English (De-En) dataset [8] with sequence length L = 128(condition length 64, target length 64; 144M total target tokens), and evaluate using BLEU [55]. Forsummarization, we use the XSum dataset [52] with sequence length L = 1088 (condition length1024, target length 64; 6M total target tokens), and report ROUGE-1 (R1), ROUGE-2 (R2), andROUGE-L (R-L) [40]. We treat both as sequence-to-sequence tasks and do not use sequence packingfor conditional generation.
+  [108,581] Model.We use contextual embeddings from a frozen pretrained T5-small encoder [60] (35M) withembedding dimension 512. We use a bottleneck design that linearly projects embeddings into alower-dimensional space of size 128, and then projects them back to the hidden size of the model [37].We consider three model sizes: ELF-B (105M), ELF-M (342M), and ELF-L (652M), and use ELF-Bas the default for ablations. Detailed configurations are shown in Appendix Tab. 6.
+  [108,643] Training and inference.We train our model using the Muon optimizer [33] with a learning rate of0.002 and a batch size of 512. The model is trained for 5 epochs on OWT (around 95K steps), andfor 100 epochs on WMT14 and XSum (around 880K and 40K steps, respectively). Depending on theselected model mode, the network is trained with either the MSE loss in Eq. 1 (80%) or the CE lossin Eq. 2 (20%). During inference, we use the ODE or SDE sampler to generate samples.
+  [108,703] 2We do not use validation perplexity, since likelihood evaluation for flow-based models can require additional likelihood-specific training [1].
+  [304,742] 6
+  --- layout: single
+
+======================================================================
+PAGE 7  (w=612 h=792)
+  [108,74] 4.1Ablations
+  [108,94] We begin by ablating several key design choices of our model on the simpler setting of unconditionalgeneration on OWT, using the default ELF-B model and a 64-step ODE Euler sampler unlessotherwise specified. More ablation studies are shown in Appendix D.
+  [471,139] CFG=0.5
+  [108,139] Classifier-free guidance (CFG).Our flow-based con-tinuous formulation is naturally compatible with CFG, ahighly effective technique in standard diffusion models.Therefore, we first study the effect of the CFG scale.As shown in Fig. 4, increasing the CFG scale lowersgenerative perplexity but also reduces entropy, reflectinga quality–diversity trade-off. The preferred direction istoward the lower-right region of the plot, correspond-ing to lower generative perplexity and higher entropy.For most of the remaining ablations, we evaluate thisquality–diversity trade-off by sweeping the CFG scale.Each point on the curve is computed from 1,000 gener-ated samples at a specific CFG scale.
+  [357,150] 100
+  [359,165] 80
+  [440,168] CFG=1
+  [349,170] Gen. PPL 
+  [359,180] 60
+  [411,183] CFG=1.5
+  [370,191] CFG=2CFG=2.5CFG=3
+  [359,195] 40
+  [470,207] Better
+  [359,210] 20
+  [384,218] 5.25.35.45.5Entropy 
+  [338,236] Figure 4: Ablations on guidance. Weevaluate the Gen. PPL–entropy trade-offacross CFG scales: increasing the scalelowers Gen. PPL but reduces entropy.
+  [384,293] 250
+  [139,295] Learnable emb. layerGaussian emb. layerPretrained emb. layerScratch encoderPretrained encoder
+  [273,295] Separate denoiser & decoderShared-weight denoiser & decoder
+  [485,295] SDEODEDataset
+  [115,299] 140
+  [250,306] 100
+  [384,309] 200
+  [412,309] H=5.6
+  [115,311] 120
+  [252,324] 80
+  [115,324] 100
+  [384,325] 150
+  [108,326] Gen. PPL 
+  [243,326] Gen. PPL 
+  [377,326] Gen. PPL 
+  [399,330] H=5.5
+  [118,337] 80
+  [426,337] H=5.5
+  [252,341] 60
+  [384,342] 100
+  [412,349] H=5.4
+  [118,349] 60
+  [439,351] H=5.4
+  [452,357] H=5.3
+  [252,358] 40
+  [386,358] 50
+  [426,359] H=5.3
+  [395,361] H=5.2H=5.2H=5.1H=5.4
+  [118,362] 40
+  [439,363] H=5.2H=5.1
+  [219,366] Better
+  [354,366] Better
+  [128,377] 5.05.15.25.35.45.5Entropy 
+  [274,377] 5.25.35.45.5Entropy 
+  [397,377] 81632641282565121024Sampling Steps
+  [176,389] (a)
+  [310,389] (b)
+  [445,389] (c)
+  [108,404] Figure 5: Ablations on key design choices. (a) Embedding choices: we compare contextual vs. non-contextual embeddings, as well as frozen vs. learnable embeddings; pretrained contextual embeddingsachieve the best trade-off. (b) Decoding strategies: We compare a shared-weight denoiser-decoderwith a two-stage, separately trained decoder. Both strategies achieve similar trade-offs, but theshared-weight variant extends further toward the regime of low generative perplexity. (c) Samplers:we compare ODE and SDE-inspired samplers across different sampling steps; SDE-inspired samplerconsistently achieves lower generative perplexity in fewer steps.
+  [108,498] Embedding choices.Since ELF operates in a continuous embedding space, we next study howthe choice of embeddings affects performance. We ablate the continuous embeddings along twoaxes: whether the embeddings are contextual (i.e., from an encoder) or non-contextual (i.e., from asingle embedding layer), and whether they are fixed or learnable. For contextual embeddings, weevaluate those from an off-the-shelf T5 encoder [60] and embeddings from an encoder trained fromscratch on OWT using the original T5 objective. For non-contextual embeddings, we consider tokenembeddings from the pretrained T5 model, frozen Gaussian embeddings, and learnable embeddings.See Appendix E.3 for detailed setup. We show the results in Fig. 5a. Contextual embeddings achievea better generative perplexity–entropy trade-off. Embeddings from an encoder trained from scratchon OWT perform well, but slightly lag behind those from a pretrained encoder. Among the non-contextual variants, pretrained token embeddings outperform frozen Gaussian embeddings. Learnableembeddings perform the worst, likely due to the difficulty of jointly optimizing the embeddingsand the denoiser. Overall, these results suggest that pretrained contextual embeddings are favorablerepresentations of language for ELF.
+  [108,658] Decoding strategies.Since we use contextual embeddings as our continuous representations, weneed to decode them back into discrete tokens. We use a shared-weight network, with traininginterleaving LMSE and LCE. Alternatively, we explore a two-stage strategy. In the first stage, we traina decoder from scratch with a frozen pretrained T5 encoder to reconstruct tokens from masked andnoisy embeddings using LCE. In the second stage, we freeze both the encoder and decoder, and traina separate denoiser using LMSE (see Appendix E.3 for details). As shown in Fig. 5b, both strategies
+  [304,742] 7
+  --- layout: single
+
+======================================================================
+PAGE 8  (w=612 h=792)
+  [108,74] achieve a similar trade-off, but the shared-weight variant extends further toward the regime of lowgenerative perplexity , while also simplifying the pipeline by avoiding an extra training stage.
+  [108,103] Samplers.Since ELF is formulated in continuous time and continuous space, it naturally supportsboth deterministic ODE sampling and stochastic SDE-like sampling; see Appendix Alg. 6 for details.We compare ODE and SDE samplers across different sampling budgets with a self-conditioning CFGscale of 1. As shown in Fig. 5c, SDE sampling achieves substantially lower generative perplexity thanODE sampling in the few-step regime. These results suggest that introducing stochasticity duringsampling can effectively reduce error accumulation and provide a better quality–efficiency trade-off.
+  [108,181] Model scales.We study the scaling behavior of ELFacross three model sizes:ELF-B (105M), ELF-M(342M), and ELF-L (652M) (detailed in Appendix Tab. 6).We evaluate each model using both ODE and SDE sam-pling. As shown in Fig. 6, scaling consistently improvesthe generative perplexity–entropy frontier. In particular, atmatched entropy, larger models achieve lower generativeperplexity, indicating higher sample quality with compara-ble diversity. Conversely, at similar generative perplexity,larger models maintain higher entropy. The effect of thesampler is consistent across model sizes: SDE samplingimproves over ODE sampling by pushing the frontier ina more optimal direction. These results suggest that ELFscales effectively, demonstrating the potential of modelscaling. See Appendix Tab. 10 for the detailed numbers.
+  [389,182] ELF-BELF-MELF-LODESDEDataset
+  [361,185] 100
+  [364,206] 80
+  [354,219] Gen. PPL 
+  [364,226] 60
+  [364,247] 40
+  [478,266] Better
+  [364,268] 20
+  [373,279] 5.15.25.35.45.5Entropy 
+  [345,300] Figure 6:Scaling of ELF models.We compare ELF-B, ELF-M, and ELF-L. Scaling model size consistently im-proves the Gen. PPL–entropy frontier.
+  [250,358] 200
+  [115,359] 500
+  [212,359] MDLMDuoFLMLangFlowELFDataset
+  [338,359] MDLM + SDTTDuo + DCDFMLMELFDataset
+  [409,359] Base trainingExtra distillation
+  [385,364] 700
+  [250,369] 175
+  [418,374] 550B (12x) 550B (12x) 577B (13x)524B (12x)
+  [385,374] 600
+  [115,375] 400
+  [378,377] Training Tokens (B)
+  [250,379] 150
+  [385,385] 500
+  [250,390] 125
+  [108,390] Gen. PPL 
+  [243,390] Gen. PPL 
+  [115,390] 300
+  [385,395] 400
+  [250,400] 100
+  [385,406] 300
+  [115,406] 200
+  [253,411] 75
+  [365,415] H=5.5
+  [385,417] 200
+  [261,418] H=5.3
+  [230,419] H=5.6
+  [253,421] 50
+  [365,422] H=5.4
+  [115,422] 100
+  [127,422] H=5.3
+  [127,424] H=5.5H=5.3H=5.2H=5.4
+  [385,427] 100
+  [138,428] H=5.2H=5.2
+  [358,429] H=5.2
+  [399,430] 45B (1x)
+  [253,432] 25
+  [262,432] H=5.4
+  [309,433] H=5.2
+  [120,438] 0
+  [390,438] LangFlow0
+  [403,440] ELFMDLM(+ SDTT)
+  [441,440] Duo(+ DCD)
+  [462,440] FLM(FMLM)
+  [128,441] 81632641282565121024Sampling Steps
+  [263,441] 81632Sampling Steps
+  [175,453] (a)
+  [310,453] (b)
+  [445,453] (c)
+  [108,469] Figure 7: System-level comparison. ELF-B outperforms both discrete and continuous DLMs trainedunder similar settings (a) and distilled variants of other baselines that require additional rounds oftraining (b), while using substantially fewer training tokens (c).
+  [108,512] 4.2System-Level Comparison on Unconditional Generation
+  [107,532] We first compare ELF-B against both discrete DLMs, including MDLM [63] and Duo [64], andcontinuous DLMs, including FLM [35] and LangFlow [11], under a comparable setting. All modelsare trained on the OWT dataset. ELF has 105M parameters, while the compared baselines have around170M parameters. For ELF, we use our best configuration: SDE sampling with self-conditioningCFG scale of 3 (see Appendix E.2 for details). We show results in Fig. 7a. ELF achieves a generativeperplexity of 24 using only 32 sampling steps, requiring substantially less inference-time computethan prior methods.
+  [108,614] ELF remains strong even compared with distilled models, which require extra training to distill astudent model for few-step generation. As shown in Fig. 7b, in the few-step regime, ELF outperformsdistilled models, including MDLM+SDTT [63, 13], Duo+DCD [64], and FMLM [35], even withoutany additional distillation. We further explore progressive distillation for ELF in Appendix B. Thedistilled ELF model outperforms distilled baselines across 1–32 sampling steps.
+  [108,674] ELF is also substantially more data-efficient in terms of estimated training tokens, as shown in Fig. 7c.While prior DLMs typically use over 500B tokens, ELF uses only 45B.3 Together, these results
+  [108,703] 3A per-method breakdown of training token counts is provided in Appendix Tab. 8. We also experimented with training onmore tokens, but did not observe further performance improvement.
+  [304,742] 8
+  --- layout: single
+
+======================================================================
+PAGE 9  (w=612 h=792)
+  IMG xref=1623 at Rect(120.37518310546875, 266.0481262207031, 131.2653350830078, 277.1582946777344) saved=page09_img03.png
+  IMG xref=1624 at Rect(120.37518310546875, 303.5586853027344, 131.4303436279297, 314.173828125) saved=page09_img04.png
+  IMG xref=1625 at Rect(120.37518310546875, 346.7893371582031, 130.55032348632812, 357.40447998046875) saved=page09_img05.png
+  [156,74] ModelSizeDe-En†XSum‡BLEU ↑ROUGE-1 ↑ROUGE-2 ↑ROUGE-L ↑
+  [156,97] AR99M25.230.5 ± 0.1310.2 ± 0.1124.4 ± 0.12MDLM [63]99M18.433.4 ± 0.1111.6 ± 0.1025.8 ± 0.10Duo [64]170M (+35M)21.3‡31.4 ± 0.1210.1 ± 0.1025.0 ± 0.12E2D2 [4]99M24.828.4 ± 0.118.3 ± 0.0922.0 ± 0.10SeqDiffuSeq [88]-21.319.3†1.7†14.1†CDCD [15]-24.9---
+  [156,155] Ours105M (+35M)26.436.0± 0.1312.2± 0.1127.8± 0.12
+  [108,175] Table 1: Results on machine translation and summarization. We evaluate ELF-B on WMT14German-to-English (De-En) translation and XSum summarization, comparing against baselines ofsimilar parameter scale. † denotes results taken directly from prior work and is the default sourcefor De-En, while ‡ denotes results we reproduced using public codebases and is the default sourcefor XSum. For XSum, we additionally report the standard error across evaluation examples whenavailable. ELF achieves the best performance on both settings.
+  [134,266] Unconditional Generation
+  [IMG-BLOCK bbox=(120.4, 266.0, 131.3, 277.2)]
+  [434,268] Gen. PPL: 20.9       H: 5.2
+  [121,279]  ....But I still haven't found a book that I don't think would be relevant to write. Maybe I could even do a very small survey and develop a book based on my experience. Is there anything to this that you would say that's relevant to your work?.....Jesse Leren is a 30-year-old journalist and student writer. She was born in Sydney and is interested in becoming a member of the writing community. She is writing around the world for students in Australia and abroad.......
+  [134,303] Translation
+  [IMG-BLOCK bbox=(120.4, 303.6, 131.4, 314.2)]
+  [453,306]        BLEU: 71.2.       
+  [121,316] Context:      Es zeigt einen Ring aus schwarzen Löchern, 430 Millionen Lichtjahre von der Erde entfernt.
+  [121,324] Reference:  It shows a ring of black holes, 430 million light years away from the Earth.
+  [121,332] Generated:  It shows a ring of black holes, 430 million lights years from the Earth.
+  [134,345] Summarization
+  [IMG-BLOCK bbox=(120.4, 346.8, 130.6, 357.4)]
+  [374,348]   ROUGE-1: 66.7     ROUGE-2: 38.7     ROUGE-L: 60.6
+  [121,359] Context:     Joe Cardle slotted in his eighth of the season before setting up Kallum Higginbotham to extend the Pars' lead. Dumbarton's Craig Barr hit the crossbar with a second-half header but the Sons then had Andy Dowie sent off for two bookings. Substitutes Nicky Clark and Andy Ryan added late goals to add gloss to the visitors' victory. That is four wins on the bounce for Allan Johnston's men and on this form Dunfermline appear to be more than capable of sustaining a promotion challenge. Of the six players playing in....
+  [121,378] Reference:  Dunfermline climbed to the top of the Championship with an emphatic victory at Dumbarton.
+  [121,386] Generated:  Dunfermline climbed off the bottom of the Championship with a comfortable victory at Dumbarton to move within seven points.
+  [108,408] Figure 8: Qualitative examples of text generated by ELF-B. We show an unconditional sample, aGerman-to-English translation example, and a summarization example, along with their automaticevaluation metrics. Some text is omitted due to space limits; see Appendix F for more examples.
+  [108,464] show that, when combined with proper sampling and guidance, ELF achieves strong system-levelperformance. It not only improves inference efficiency, but also achieves strong performance with amuch smaller training budget, demonstrating the potential of our flow-based language model. SeeFig. 8 for qualitative examples of ELF-B’s generations.
+  [108,523] 4.3System-Level Comparison on Conditional Generation
+  [108,544] We compare ELF-B with autoregressive and diffusion-based baselines at a similar model scale. Theseinclude discrete DLMs (MDLM [63], Duo [64], and E2D2 [4]) and continuous DLMs (SeqDif-fuSeq [88] and CDCD [15]). Some results are taken from the literature and others are reproducedfrom public codebases. See Appendix Tab. 11 for a summary. We use the best sampling configurationselected on the validation set: a 64-step ODE sampler with the self-conditioning CFG scale set to 1and the input-condition CFG scale set to 2.
+  [108,615] We show the results in Tab. 1. ELF-B achieves the best performance among all compared methods onboth tasks, demonstrating the effectiveness of ELF for conditional generation. Qualitative examplesin Fig. 8 further show that ELF-B generally follows the input context and generates outputs that aresemantically aligned with the ground-truth references.
+  [108,676] 5Conclusion
+  [108,701] We introduced Embedded Language Flows (ELF), a continuous diffusion language model thatformulates language generation in continuous embedding space using continuous-time Flow Matching.
+  [304,742] 9
+  --- layout: single
+
+======================================================================
+PAGE 10  (w=612 h=792)
+  [108,74] In contrast to prior DLMs, ELF keeps the denoising trajectory continuous and applies discretizationonly at the final step, enabling straightforward adaptation of techniques from continuous diffusionmodels. Empirically, compared with leading discrete DLMs and existing continuous DLMs, ELFachieves a strong quality–efficiency trade-off across language generation tasks, attaining lowergenerative perplexity with fewer sampling steps and fewer training tokens. These results suggest thatcontinuous DLMs remain a promising direction for diffusion-based language modeling.
+  [108,156] Acknowledgments and Disclosure of Funding
+  [108,180] We thank Mingyang Deng, Zhengyang Geng, Belinda Li, Itamar Pres, and Laura Ruis, for theirhelpful feedback and insightful discussions. We thank Google TPU Research Cloud (TRC) forgranting us access to TPUs. This work was supported in part by the Siegel Family Foundation Questfor Intelligence.
+  [301,742] 10
+  --- layout: single
+
+======================================================================
+PAGE 11  (w=612 h=792)
+  [108,73] References
+  [113,92] [1] Xinyue Ai, Yutong He, Albert Gu, Ruslan Salakhutdinov, J Zico Kolter, Nicholas Matthew
+  [130,103] Boffi, and Max Simchowitz. Joint distillation for fast likelihood evaluation and sampling inflow-based models. In ICLR, 2026. 6
+  [113,134] [2] Michael Albergo, Nicholas M Boffi, and Eric Vanden-Eijnden. Stochastic interpolants: A
+  [130,144] unifying framework for flows and diffusions. JMLR, 2025. 2, 3, 18
+  [113,164] [3] Michael Samuel Albergo and Eric Vanden-Eijnden. Building normalizing flows with stochastic
+  [130,175] interpolants. In ICLR, 2023. 1, 2, 4
+  [113,194] [4] Marianne Arriola, Yair Schiff, Hao Phung, Aaron Gokaslan, and Volodymyr Kuleshov. Encoder-
+  [130,205] decoder diffusion language models for efficient training and inference. In NeurIPS, 2025. 3, 9,31, 32
+  [113,236] [5] Jacob Austin, Daniel D Johnson, Jonathan Ho, Daniel Tarlow, and Rianne Van Den Berg.
+  [130,247] Structured denoising diffusion models in discrete state-spaces. In NeurIPS, 2021. 1, 2, 3
+  [113,266] [6] Georgios Batzolis, Mark Girolami, and Luca Ambrogioni. Towards closing the autoregressive
+  [130,277] gap in language modeling via entropy-gated continuous bitstream diffusion. arXiv preprintarXiv:2605.07013, 2026. 3
+  [113,308] [7] Black Forest Labs, Stephen Batifol, Andreas Blattmann, Frederic Boesel, Saksham Consul,
+  [130,318] Cyril Diagne, Tim Dockhorn, Jack English, Zion English, Patrick Esser, Sumith Kulal, KyleLacey, Yam Levi, Cheng Li, Dominik Lorenz, Jonas Müller, Dustin Podell, Robin Rombach,Harry Saini, Axel Sauer, and Luke Smith. FLUX.1 Kontext: Flow matching for in-contextimage generation and editing in latent space. arXiv preprint arXiv:2506.15742, 2025. 2
+  [113,371] [8] Ondrej Bojar, Christian Buck, Christian Federmann, Barry Haddow, Philipp Koehn, Johannes
+  [130,382] Leveling, Christof Monz, Pavel Pecina, Matt Post, Herve Saint-Amand, Radu Soricut, LuciaSpecia, and Ales Tamchyna. Findings of the 2014 workshop on statistical machine translation.In ACL Workshop on Statistical Machine Translation, 2014. 2, 6
+  [113,423] [9] Huayu Chen, Kai Jiang, Kaiwen Zheng, Jianfei Chen, Hang Su, and Jun Zhu. Visual generation
+  [129,434] without guidance. In ICML, 2025. 6, 22
+  [108,453] [10] Ting Chen, Ruixiang Zhang, and Geoffrey Hinton. Analog bits: Generating discrete data using
+  [130,464] diffusion models with self-conditioning. In ICLR, 2023. 5, 22
+  [108,484] [11] Yuxin Chen, Chumeng Liang, Hangke Sui, Ruihan Guo, Chaoran Cheng, Jiaxuan You, and
+  [130,495] Ge Liu. Langflow: Continuous diffusion rivals discrete in language modeling. arXiv preprintarXiv:2604.11748, 2026. 2, 3, 6, 8, 18, 31
+  [108,523] [12] Oscar Davis, Samuel Kessler, Mircea Petrache, ˙Ismail ˙Ilkan Ceylan, Michael Bronstein, and
+  [129,536] Avishek Joey Bose. Fisher flow matching for generative modeling over discrete data. InNeurIPS, 2024. 3, 18
+  [108,567] [13] Justin Deschenaux and Caglar Gulcehre. Beyond autoregression: Fast LLMs via self-distillation
+  [130,577] through time. In ICLR, 2025. 8, 19, 20
+  [108,597] [14] Justin Deschenaux, Caglar Gulcehre, and Subham Sekhar Sahoo. The diffusion duality, chapter
+  [130,608] ii: ψ-samplers and efficient curriculum. In ICLR, 2026. 3
+  [108,627] [15] Sander Dieleman, Laurent Sartran, Arman Roshannai, Nikolay Savinov, Yaroslav Ganin,
+  [130,638] Pierre H Richemond, Arnaud Doucet, Robin Strudel, Chris Dyer, Conor Durkan, CurtisHawthorne, Rémi Leblond, Will Grathwohl, and Jonas Adler. Continuous diffusion for categor-ical data. arXiv preprint arXiv:2211.15089, 2022. 1, 2, 5, 9, 18, 31
+  [108,680] [16] Patrick Esser, Sumith Kulal, Andreas Blattmann, Rahim Entezari, Jonas Müller, Harry Saini,
+  [129,691] Yam Levi, Dominik Lorenz, Axel Sauer, Frederic Boesel, Dustin Podell, Tim Dockhorn, Zion
+  [130,701] English, and Robin Rombach. Scaling rectified flow Transformers for high-resolution imagesynthesis. In ICML, 2024. 2, 6
+  [301,742] 11
+  --- layout: single
+
+======================================================================
+PAGE 12  (w=612 h=792)
+  [108,74] [17] Zhujin Gao, Junliang Guo, Xu Tan, Yongxin Zhu, Fang Zhang, Jiang Bian, and Linli Xu.
+  [129,85] Empowering diffusion models on the embedding space for text generation. In NAACL, 2024. 2,18
+  [108,117] [18] Zhengyang Geng, Mingyang Deng, Xingjian Bai, J Zico Kolter, and Kaiming He. Mean flows
+  [130,128] for one-step generative modeling. In NeurIPS, 2025. 6, 22, 23
+  [108,149] [19] Zhengyang Geng, Yiyang Lu, Zongze Wu, Eli Shechtman, J Zico Kolter, and Kaiming He.
+  [130,159] Improved mean flows: On the challenges of fastforward generative models. arXiv preprintarXiv:2512.02012, 2025. 6, 22, 23
+  [108,191] [20] Aaron Gokaslan and Vanya Cohen. Openwebtext corpus, 2019. 6, 29
+  [108,212] [21] Shansan Gong, Mukai Li, Jiangtao Feng, Zhiyong Wu, and LingPeng Kong. Diffuseq: Sequence
+  [130,223] to sequence text generation with diffusion models. In ICLR, 2023. 1, 2, 18
+  [108,244] [22] Shansan Gong, Mukai Li, Jiangtao Feng, Zhiyong Wu, and Lingpeng Kong. DiffuSeq-v2:
+  [129,255] Bridging discrete and continuous text spaces for accelerated seq2seq diffusion models. InFindings of EMNLP, 2023. 3
+  [108,287] [23] Shansan Gong, Ruixiang Zhang, Huangjie Zheng, Jiatao Gu, Navdeep Jaitly, Lingpeng Kong,
+  [130,298] and Yizhe Zhang. Diffucoder: Understanding and improving masked diffusion models for codegeneration. In ICLR, 2026. 3
+  [108,329] [24] Ishaan Gulrajani and Tatsunori B Hashimoto. Likelihood-based diffusion language models. In
+  [129,340] NeurIPS, 2023. 2, 18
+  [108,361] [25] Hongcan Guo, Qinyu Zhao, Yian Zhao, Shen Nie, Rui Zhu, Qiushan Guo, Feng Wang, Tao
+  [129,372] Yang, Hengshuang Zhao, Guoqiang Wei, and Yan Zeng. Continuous latent diffusion language
+  [130,383] model. arXiv preprint arXiv:2605.06548, 2026. 3, 18
+  [108,404] [26] Xiaochuang Han, Sachin Kumar, and Yulia Tsvetkov. SSD-LM: Semi-autoregressive simplex-
+  [129,415] based diffusion language model for text generation and modular control. In ACL, 2023. 3,18
+  [108,447] [27] Zhengfu He, Tianxiang Sun, Qiong Tang, Kuanning Wang, Xuan-Jing Huang, and Xipeng Qiu.
+  [130,457] Diffusionbert: Improving generative masked language models with diffusion models. In ACL,2023. 1, 3
+  [108,489] [28] Alex Henry, Prudhvi Raj Dachapally, Shubham Shantaram Pawar, and Yuxuan Chen. Query-key
+  [130,500] normalization for Transformers. In Findings of EMNLP, 2020. 29
+  [108,521] [29] Jonathan Ho and Tim Salimans. Classifier-free diffusion guidance. In NeurIPS Workshops,
+  [130,532] 2021. 5, 6
+  [108,553] [30] Jonathan Ho, Ajay Jain, and Pieter Abbeel. Denoising diffusion probabilistic models. In
+  [129,563] NeurIPS, 2020. 1, 2, 3, 18
+  [108,584] [31] Vincent Tao Hu, Di Wu, Yuki M Asano, Pascal Mettes, Basura Fernando, Björn Ommer, and
+  [129,595] Cees G M Snoek. Flow matching for conditional text generation in a few sampling steps. InEACL, 2024. 2, 18
+  [108,627] [32] Jaehyeong Jo and Sung Ju Hwang. Continuous diffusion model for language modeling. In
+  [129,638] NeurIPS, 2025. 3, 18
+  [108,659] [33] Keller Jordan, Yuchen Jin, Vlado Boza, You Jiacheng, Franz Cecista, Laker Newhouse, and
+  [129,670] Jeremy Bernstein. Muon: An optimizer for hidden layers in neural networks. Technical report,Keller Jordan blog, 2024. 6, 27
+  [108,701] [34] Tero Karras, Miika Aittala, Timo Aila, and Samuli Laine. Elucidating the design space of
+  [130,712] diffusion-based generative models. In NeurIPS, 2022. 28
+  [301,742] 12
+  --- layout: single
+
+======================================================================
+PAGE 13  (w=612 h=792)
+  [108,74] [35] Chanhyuk Lee, Jaehoon Yoo, Manan Agarwal, Sheel Shah, Jerry Huang, Aditi Raghunathan,
+  [130,85] Seunghoon Hong, Nicholas M Boffi, and Jinwoo Kim. Flow map language models: One-steplanguage modeling via continuous denoising. arXiv preprint arXiv:2602.16813, 2026. 2, 3, 5,6, 8, 18, 19, 20, 31
+  [108,126] [36] Lijiang Li, Zuwei Long, Yunhang Shen, Heting Gao, Haoyu Cao, Xing Sun, Caifeng Shan, Ran
+  [130,137] He, and Chaoyou Fu. Omni-diffusion: Unified multimodal understanding and generation withmasked discrete diffusion. arXiv preprint arXiv:2603.06577, 2026. 3
+  [108,167] [37] Tianhong Li and Kaiming He. Back to basics: Let denoising generative models denoise. arXiv
+  [130,178] preprint arXiv:2511.13720, 2025. 2, 4, 6, 25, 26
+  [108,197] [38] Tianyi Li, Mingda Chen, Bowei Guo, and Zhiqiang Shen. A survey on diffusion language
+  [130,208] models. arXiv preprint arXiv:2508.10875, 2025. 1, 3
+  [108,227] [39] Xiang Li, John Thickstun, Ishaan Gulrajani, Percy S Liang, and Tatsunori B Hashimoto.
+  [130,238] Diffusion-LM improves controllable text generation. In NeurIPS, 2022. 1, 2, 18
+  [108,257] [40] Chin-Yew Lin. ROUGE: A package for automatic evaluation of summaries. In ACL Workshop
+  [130,268] on Text Summarization Branches Out, 2004. 6
+  [108,287] [41] Zhenghao Lin, Yeyun Gong, Yelong Shen, Tong Wu, Zhihao Fan, Chen Lin, Nan Duan, and
+  [129,298] Weizhu Chen. Text generation with diffusion language models: A pre-training approach withcontinuous paragraph denoise. In ICML, 2023. 2, 18
+  [108,328] [42] Yaron Lipman, Ricky TQ Chen, Heli Ben-Hamu, Maximilian Nickel, and Matt Le. Flow
+  [130,339] matching for generative modeling. In ICLR, 2023. 1, 2, 3, 4, 18
+  [108,358] [43] Xingchao Liu, Chengyue Gong, and Qiang Liu. Flow straight and fast: Learning to generate
+  [130,369] and transfer data with rectified flow. In ICLR, 2023. 1, 2, 3, 4, 18
+  [108,388] [44] Ilya Loshchilov and Frank Hutter. Decoupled weight decay regularization. In ICLR, 2019. 27
+  [108,407] [45] Aaron Lou, Chenlin Meng, and Stefano Ermon. Discrete diffusion modeling by estimating the
+  [130,418] ratios of the data distribution. In ICML, 2024. 1
+  [108,437] [46] Justin Lovelace, Varsha Kishore, Chao Wan, Eliot Shekhtman, and Kilian Q Weinberger. Latent
+  [130,448] diffusion for language generation. In NeurIPS, 2023. 2, 3, 5, 18, 31
+  [108,467] [47] Justin Lovelace, Varsha Kishore, Yiwei Chen, and Kilian Q Weinberger. Diffusion guided
+  [130,478] language modeling. In Findings of ACL, 2024. 3, 18
+  [108,497] [48] Nanye Ma, Mark Goldstein, Michael S Albergo, Nicholas M Boffi, Eric Vanden-Eijnden,
+  [130,508] and Saining Xie. SiT: Exploring flow and diffusion-based generative models with scalableinterpolant Transformers. In ECCV, 2024. 2, 5, 25
+  [108,538] [49] Rabeeh Karimi Mahabadi, Hamish Ivison, Jaesung Tae, James Henderson, Iz Beltagy,
+  [129,549] Matthew E Peters, and Arman Cohan. Tess: Text-to-text self-conditioned simplex diffusion. InEACL, 2024. 3, 5, 18
+  [108,579] [50] Viacheslav Meshchaninov, Egor Chimbulatov, Alexander Shabalin, Aleksandr Abramov, and
+  [129,590] Dmitry Vetrov. Cosmos: Compressed and smooth latent space for text diffusion modeling. InNeurIPS, 2025. 2, 3, 18
+  [108,620] [51] Viacheslav Meshchaninov, Alexander Shabalin, Egor Chimbulatov, Nikita Gushchin, Ilya
+  [130,631] Koziev, Alexander Korotin, and Dmitry Vetrov. How to train your latent diffusion languagemodel jointly with the latent space. arXiv preprint arXiv:2605.07933, 2026. 3, 18
+  [108,661] [52] Shashi Narayan, Shay B. Cohen, and Mirella Lapata. Don’t give me the details, just the
+  [130,671] summary! topic-aware convolutional neural networks for extreme summarization. In EMNLP,2018. 2, 6
+  [108,701] [53] Alexander Quinn Nichol and Prafulla Dhariwal. Improved denoising diffusion probabilistic
+  [130,712] models. In ICML, 2021. 2, 3
+  [301,742] 13
+  --- layout: single
+
+======================================================================
+PAGE 14  (w=612 h=792)
+  [108,74] [54] Shen Nie, Fengqi Zhu, Zebin You, Xiaolu Zhang, Jingyang Ou, Jun Hu, Jun Zhou, Yankai Lin,
+  [129,85] Ji-Rong Wen, and Chongxuan Li. Large language diffusion models. In NeurIPS, 2025. 1, 3
+  [108,105] [55] Kishore Papineni, Salim Roukos, Todd Ward, and Wei-Jing Zhu. BLEU: a method for automatic
+  [130,116] evaluation of machine translation. In ACL, 2002. 6
+  [108,136] [56] William Peebles and Saining Xie. Scalable diffusion models with Transformers. In ICCV, 2023.
+  [130,147] 23, 29
+  [108,166] [57] Peter Potaptchik, Jason Yim, Adhi Saravanan, Peter Holderrieth, Eric Vanden-Eijnden, and
+  [130,177] Michael S Albergo. Discrete flow maps. arXiv preprint arXiv:2604.09784, 2026. 3, 5, 18
+  [108,197] [58] Patrick Pynadath, Jiaxin Shi, and Ruqi Zhang. CANDI: Hybrid discrete-continuous diffusion
+  [130,208] models. arXiv preprint arXiv:2510.22510, 2025. 3
+  [108,227] [59] Alec Radford, Jeffrey Wu, Rewon Child, David Luan, Dario Amodei, and Ilya Sutskever.
+  [130,238] Language models are unsupervised multitask learners. OpenAI blog, 2019. 6
+  [108,258] [60] Colin Raffel, Noam Shazeer, Adam Roberts, Katherine Lee, Sharan Narang, Michael Matena,
+  [129,269] Yanqi Zhou, Wei Li, and Peter J Liu. Exploring the limits of transfer learning with a unified
+  [130,280] text-to-text transformer. JMLR, 2020. 4, 6, 7, 29
+  [108,299] [61] Robin Rombach, Andreas Blattmann, Dominik Lorenz, Patrick Esser, and Björn Ommer.
+  [130,310] High-resolution image synthesis with latent diffusion models. In CVPR, 2022. 2
+  [108,328] [62] Daan Roos, Oscar Davis, Floor Eijkelboom, Michael Bronstein, Max Welling, ˙Ismail ˙Ilkan
+  [130,341] Ceylan, Luca Ambrogioni, and Jan-Willem van de Meent. Categorical flow maps. arXiv preprintarXiv:2602.12233, 2026. 3, 18
+  [108,372] [63] Subham Sahoo, Marianne Arriola, Yair Schiff, Aaron Gokaslan, Edgar Marroquin, Justin Chiu,
+  [129,382] Alexander Rush, and Volodymyr Kuleshov. Simple and effective masked diffusion languagemodels. In NeurIPS, 2024. 1, 2, 3, 6, 8, 9, 19, 20, 31
+  [108,413] [64] Subham Sekhar Sahoo, Justin Deschenaux, Aaron Gokaslan, Guanghan Wang, Justin Chiu, and
+  [129,424] Volodymyr Kuleshov. The diffusion duality. In ICML, 2025. 1, 2, 3, 6, 8, 9, 19, 20, 31, 32
+  [108,444] [65] Subham Sekhar Sahoo, Jean-Marie Lemercier, Zhihan Yang, Justin Deschenaux, Jingyu Liu,
+  [129,454] John Thickstun, and Ante Jukic. Scaling beyond masked diffusion language models. arXivpreprint arXiv:2602.15014, 2026. 1, 3
+  [108,485] [66] Tim Salimans and Jonathan Ho. Progressive distillation for fast sampling of diffusion models.
+  [130,496] In ICLR, 2022. 19
+  [108,516] [67] Alexander Shabalin, Viacheslav Meshchaninov, Egor Chimbulatov, Vladislav Lapikov, Roman
+  [130,527] Kim, Grigory Bartosh, Dmitry Molchanov, Sergey Markov, and Dmitry Vetrov. TEncDM:Understanding the properties of the diffusion model in the space of language model encodings.In AAAI, 2025. 3, 5, 18
+  [108,568] [68] Alexander Shabalin, Simon Elistratov, Viacheslav Meshchaninov, Ildus Sadrtdinov, and Dmitry
+  [129,579] Vetrov. Why gaussian diffusion models fail on discrete data? arXiv preprint arXiv:2604.02028,2026. 5
+  [108,610] [69] Noam Shazeer. GLU variants improve Transformer. arXiv preprint arXiv:2002.05202, 2020.
+  [130,621] 29
+  [108,640] [70] Junzhe Shen, Jieru Zhao, Ziwei He, and Zhouhan Lin. Codar: Continuous diffusion language
+  [130,651] models are more powerful than you think. arXiv preprint arXiv:2603.02547, 2026. 2, 3, 18
+  [108,671] [71] Jiaxin Shi, Kehang Han, Zhe Wang, Arnaud Doucet, and Michalis Titsias. Simplified and
+  [130,682] generalized masked diffusion for discrete data. In NeurIPS, 2024. 3
+  [108,702] [72] Jascha Sohl-Dickstein, Eric Weiss, Niru Maheswaranathan, and Surya Ganguli. Deep unsuper-
+  [129,712] vised learning using nonequilibrium thermodynamics. In ICML, 2015. 1, 2
+  [301,742] 14
+  --- layout: single
+
+======================================================================
+PAGE 15  (w=612 h=792)
+  [108,74] [73] Yang Song, Jascha Sohl-Dickstein, Diederik P Kingma, Abhishek Kumar, Stefano Ermon, and
+  [130,85] Ben Poole. Score-based generative modeling through stochastic differential equations. In ICLR,2021. 1, 2, 18
+  [108,115] [74] Yuxuan Song, Zheng Zhang, Cheng Luo, Pengyang Gao, Fan Xia, Hao Luo, Zheng Li, Yuehang
+  [129,125] Yang, Hongli Yu, Xingwei Qu, Yuwei Fu, Jing Su, Ge Zhang, Wenhao Huang, Mingxuan Wang,
+  [130,136] Lin Yan, Xiaoying Jia, Jingjing Liu, Wei-Ying Ma, Ya-Qin Zhang, Yonghui Wu, and HaoZhou. Seed diffusion: A large-scale diffusion language model with high-speed inference. arXivpreprint arXiv:2508.02193, 2025. 3
+  [108,176] [75] Robin Strudel, Corentin Tallec, Florent Altché, Yilun Du, Yaroslav Ganin, Arthur Mensch,
+  [129,187] Will Grathwohl, Nikolay Savinov, Sander Dieleman, Laurent Sifre, and Rémi Leblond. Self-conditioned embedding diffusion for text generation. arXiv preprint arXiv:2211.04236, 2022.2, 5, 18
+  [108,227] [76] Jianlin Su, Murtadha Ahmed, Yu Lu, Shengfeng Pan, Wen Bo, and Yunfeng Liu. Roformer:
+  [130,238] Enhanced transformer with rotary position embedding. Neurocomputing, 568:127063, 2024. 29
+  [108,257] [77] Jaesung Tae, Hamish Ivison, Sachin Kumar, and Arman Cohan. Tess 2: A large-scale generalist
+  [130,267] diffusion language model. In ACL, 2025. 3, 18
+  [108,286] [78] Zhicong Tang, Jianmin Bao, Dong Chen, and Baining Guo. Diffusion models without classifier-
+  [130,297] free guidance. arXiv preprint arXiv:2502.12154, 2025. 6, 22
+  [108,315] [79] Wan Team, Ang Wang, Baole Ai, Bin Wen, Chaojie Mao, Chen-Wei Xie, Di Chen, Feiwu Yu,
+  [130,326] Haiming Zhao, Jianxiao Yang, et al. Wan: Open and advanced large-scale video generativemodels. arXiv preprint arXiv:2503.20314, 2025. 2
+  [108,355] [80] Guanghan Wang, Yair Schiff, Subham Sekhar Sahoo, and Volodymyr Kuleshov. Remasking
+  [130,366] discrete diffusion models with inference-time scaling. In NeurIPS, 2025. 3
+  [108,384] [81] Renzhi Wang, Jing Li, and Piji Li. InfoDiffusion: Information entropy aware diffusion process
+  [130,395] for non-autoregressive text generation. In Findings of EMNLP, 2023. 2, 18
+  [108,413] [82] Chengyue Wu, Hao Zhang, Shuchen Xue, Zhijian Liu, Shizhe Diao, Ligeng Zhu, Ping Luo,
+  [130,424] Song Han, and Enze Xie. Fast-dllm: Training-free acceleration of diffusion llm by enabling kvcache and parallel decoding. In ICLR, 2026. 3
+  [108,453] [83] Tong Wu, Zhihao Fan, Xiao Liu, Hai-Tao Zheng, Yeyun Gong, Jian Jiao, Juntao Li, Jian
+  [130,464] Guo, Nan Duan, and Weizhu Chen. AR-Diffusion: Auto-regressive diffusion model for textgeneration. In NeurIPS, 2023. 2, 18
+  [108,494] [84] Ling Yang, Ye Tian, Bowen Li, Xinchen Zhang, Ke Shen, Yunhai Tong, and Mengdi Wang.
+  [130,504] Mmada: Multimodal large diffusion language models. In NeurIPS, 2025. 3
+  [108,523] [85] Jiacheng Ye, Zhihui Xie, Lin Zheng, Jiahui Gao, Zirui Wu, Xin Jiang, Zhenguo Li, and Lingpeng
+  [130,534] Kong. Dream 7b: Diffusion large language models. arXiv preprint arXiv:2508.15487, 2025. 1,3
+  [108,563] [86] Jiasheng Ye, Zaixiang Zheng, Yu Bao, Lihua Qian, and Mingxuan Wang. DINOISER: Diffused
+  [129,574] conditional sequence learning by manipulating noises. Transactions of the Association forComputational Linguistics, 2024. 2, 18
+  [108,603] [87] Zebin You, Shen Nie, Xiaolu Zhang, Jun Hu, Jun Zhou, Zhiwu Lu, Ji-Rong Wen, and Chongxuan
+  [130,614] Li. Llada-v: Large language diffusion models with visual instruction tuning. arXiv preprintarXiv:2505.16933, 2025. 3
+  [108,643] [88] Hongyi Yuan, Zheng Yuan, Chuanqi Tan, Fei Huang, and Songfang Huang. Seqdiffuseq: Text
+  [130,654] diffusion with encoder-decoder transformers. In NAACL, 2024. 2, 5, 9, 18
+  [108,672] [89] Biao Zhang and Rico Sennrich. Root mean square layer normalization. In NeurIPS, 2019. 29
+  [108,691] [90] Yizhe Zhang, Jiatao Gu, Zhuofeng Wu, Shuangfei Zhai, Josh Susskind, and Navdeep Jaitly.
+  [130,701] PLANNER: Generating diversified paragraphs via latent language diffusion model. In NeurIPS,2023. 3, 18
+  [301,742] 15
+  --- layout: single
+
+======================================================================
+PAGE 16  (w=612 h=792)
+  [108,74] [91] Huangjie Zheng, Shansan Gong, Ruixiang Zhang, Tianrong Chen, Jiatao Gu, Mingyuan Zhou,
+  [130,85] Navdeep Jaitly, and Yizhe Zhang. Continuously augmented discrete diffusion model forcategorical generative modeling. arXiv preprint arXiv:2510.01329, 2025. 3
+  [108,115] [92] Cai Zhou, Chenxiao Yang, Yi Hu, Chenyu Wang, Chubin Zhang, Muhan Zhang, Lester Mackey,
+  [129,126] Tommi Jaakkola, Stephen Bates, and Dinghuai Zhang. Coevolutionary continuous discretediffusion: Make your diffusion language model a latent reasoner. In ICML, 2026. 3
+  [301,742] 16
+  --- layout: single
+
+======================================================================
+PAGE 17  (w=612 h=792)
+  [108,73] AContinuous Diffusion Language Model Survey
+  [108,97] Survey details.We provide a detailed survey in Tab. 2. The survey summarizes representativecontinuous diffusion and flow-based language models along several design axes, including theunderlying diffusion or flow process, the continuous state in which denoising is performed, whetherintermediate denoising states are discretized during training or inference, and whether a separatedecoder is required to map latent states back to text.
+  [108,157] In particular, the Train per-step discr. and Infer. per-step discr. columns distinguish two differentuses of intermediate discretization. Train per-step discr. indicates that intermediate denoising statesare mapped to token predictions during training and supervised with token-level objectives such ascross-entropy loss. This provides direct vocabulary-level guidance, but also couples intermediatedenoising states to categorical predictions. Infer. per-step discr. indicates that intermediate samplingstates are explicitly projected back to token-aligned representations during generation, such asnearest-neighbor rounding in embedding space or argmax projection on a simplex. Methods withoutinference-time per-step discretization keep the sampling trajectory continuous and discretize only atthe final step. The Sep. dec. column indicates whether a method requires a separate decoder, trainedeither separately or jointly with the diffusion model, to map continuous latent representations back todiscrete text.
+  [108,290] Positioning of ELF.Tab. 2 shows that existing continuous DLMs differ substantially in where thedenoising process is defined and how continuous states are mapped back to text. Many embedding-space and simplex-based methods use training-time per-step discretization through token-levelobjectives, commonly cross-entropy, at intermediate denoising steps. These objectives provide directtoken-level guidance, while making the denoising trajectory more tightly coupled to vocabulary-levelprediction. Latent Diffusion LMs often avoid such per-step vocabulary supervision, but often rely onDDPM-style or score-based formulations with DDPM noise schedules and require a distinct latent-to-text decoder, such as an autoregressive decoder, non-autoregressive decoder, or latent decompressor,to recover discrete tokens, trained either separately or jointly with the diffusion model.
+  [108,393] ELF occupies a different design point. It formulates language generation as continuous-time FlowMatching in a frozen contextual embedding space and keeps the sampling trajectory continuous,applying discretization only at the final decoding step. Unlike prior latent Diffusion LMs, ELF doesnot require a separate decoder: a single shared-weight network performs intermediate denoising andrecovers tokens at the final step through the unembedding layer.
+  [301,742] 17
+  --- layout: single
+
+======================================================================
+PAGE 18  (w=612 h=792)
+  [161,117] MethodProcess†State‡TrainInfer.
+  [360,125] Sep. dec.per-stepper-stepdiscr.discr.
+  [161,146] Embedding-space Diffusion LMs
+  [161,160] Diffusion-LM [Li et al., 2022]DDPMlearn embYesYesSED [Strudel et al., 2022]DDPMfix embYesCDCD [Dieleman et al., 2022]Score-ODElearn embYesDiffuSeq [Gong et al., 2023]DDPMlearn embYesYesGENIE [Lin et al., 2023]DDPMlearn embYesAR-Diffusion [Wu et al., 2023]*DDPMlearn embYesPlaid [Gulrajani and Hashimoto, 2023]VLBlearn embYesInfoDiffusion [Wang et al., 2023]DDPMlearn embYesDifformer [Gao et al., 2024]DDPMlearn embYesSeqDiffuSeq [Yuan et al., 2024]DDPMlearn embYesDINOISER [Ye et al., 2024]SDE/DDIMlearn embYesFlowSeq [Hu et al., 2024]FMlearn embYes
+  [161,263] Simplex Diffusion LMs
+  [161,275] SSD-LM [Han et al., 2023]*DDPMsimplexYesYesTESS [Mahabadi et al., 2024]DDPMsimplexYesYesRDLM [Jo and Hwang, 2025]RDMsimplexYesTESS 2 [Tae et al., 2025]DDPMsimplexYesYesFisher-Flow [Davis et al., 2024]FMsimplex
+  [161,322] Latent Diffusion LMs
+  [161,335] LD4LG [Lovelace et al., 2023]*DDPMfix encYesPLANNER [Zhang et al., 2023]*DDPMfix encYesDGLM [Lovelace et al., 2024]*VP-DDPMfix encYesTEncDM [Shabalin et al., 2025]VP-DDPMfix encYesCosmos [Meshchaninov et al., 2025]VP-DDPMfix encYesCoDAR [Shen et al., 2026]*VP-SDEfix encYesLDLM [Meshchaninov et al., 2026]VP-DDPMlearn encYesCola DLM [Guo et al., 2026]*FMlearn encYes
+  [161,409] Flow-based LMs
+  [161,422] CFM [Roos et al., 2026]FMsimplexYesFLM [Lee et al., 2026]FMone-hotYesDFM [Potaptchik et al., 2026]FMsimplexYesLangFlow [Chen et al., 2026]Bregman FMlearn embYes
+  [161,460] ELF (ours)FMfix enc
+  [157,478] †Process: FM = Flow Matching [42, 43, 2]; DDPM = Denoising Diffusion Probabilistic Model [30]; VP-DDPM/-SDE = variance-preserving DDPM / stochastic differential equation [73]; Score-ODE = probability-flow ODE [73]; SDE/DDIM = continuous-time SDE [73] integrated with the deterministic DDIM solver;VLB = variational lower bound, specifically Plaid’s T →∞continuous-time limit [24]; RDM = RiemannianDiffusion Mixture, applied to the categorical sphere by RDLM [32]; Bregman FM = Flow Matching with aBregman-divergence regression objective, used by LangFlow [11].
+  [157,528] ‡State: learn emb = jointly trained token embedding matrix; fix emb = frozen pretrained embedding lookup;fix enc = frozen pretrained encoder, optionally with a compressed autoencoder bottleneck on top; learn enc= trainable latent encoder, such as one on top of frozen pretrained representations or a text VAE, trainedjointly with the diffusion model; simplex = vocabulary-shaped logit simplex or square-root simplex on thesphere; one-hot = per-token one-hot stack over the vocabulary.
+  [108,578] Table 2: Survey of continuous diffusion and flow-based language models. We summarizerepresentative continuous diffusion and flow-based language models along several design axes.Process denotes the diffusion or flow process, with green indicating continuous-time formulationsand red indicating discrete-time formulations. State denotes the continuous state in which denoisingis performed. Train per-step discr. marks methods that convert intermediate denoising states totoken predictions during training and apply token-level supervision such as cross-entropy loss atintermediate steps. Infer. per-step discr. marks methods that project intermediate sampling states backto token-aligned states during generation. Sep. dec. marks methods that require a separate decoder tomap latent representations back to text. Blank entries indicate absence. * denotes autoregressive orblock-autoregressive generation.
+  [301,742] 18
+  --- layout: single
+
+======================================================================
+PAGE 19  (w=612 h=792)
+  [108,73] BProgressive Distillation of ELF for Few-Step Language Generation
+  [108,97] We have shown that ELF achieves strong performance with 8–32 sampling steps, outperformingprior discrete and continuous DLMs that rely on distillation. However, its performance degrades asthe number of sampling steps is further reduced, and one-/few-step generation remains challengingfor ELF. Progressive distillation has been shown to substantially reduce the number of samplingsteps while preserving generation quality [66]. Motivated by this approach, we introduce ELF withprogressive distillation (ELF+PD), which distills a pretrained ELF teacher into a student model forfew-step language generation.
+  [108,187] B.1Method
+  [108,207] The key idea of progressive distillation [66] is to compress K teacher sampling steps into a singlestudent step. Given a time interval [t, r], we apply K teacher sampling steps to move the noisyembedding from zt to zr using a numerical solver. We then convert the resulting teacher displacementinto a new target:
+  [253,249] ˜x = zt + 1 −t
+  [295,256] r −t(zr −zt).(3)
+  [108,281] We train an ELF+PD student with parameters θ by minimizing
+  [360,297] 2.(4)
+  [239,299] Ldistill = Et,x,ϵ
+  [300,299] xθ(zt, t) −˜x
+  [108,324] We keep the two-branch training setup of ELF and use the same shared-weight denoiser and decoder.For the denoising branch, we replace the MSE loss in Eq. 1 with the distillation loss in Eq. 4. For thedecoding branch, we keep the original cross-entropy loss in Eq. 2.
+  [108,362] We progressively distill the teacher into a single-step student by halving the number of steps ateach round as in [66, 63, 64]. We perform five rounds of distillation using the curriculum shown inTab. 3. We use a fixed 64-step ELF teacher throughout all five rounds. The first 16-step student isinitialized from the teacher, while each subsequent student is initialized from the student from theprevious round. After the first round, each round halves the number of student steps. At a roundtargeting an N-step student, each student step matches 64/N teacher substeps, allowing the studentto approximate the 64-step teacher trajectory using fewer sampling steps.
+  [108,452] B.2Experimental Setup
+  [108,472] We use the OpenWebText dataset and follow the experimental setup described in Sec. 4. For eachround of distillation, we train the model for one epoch using the same hyperparameter settings as inthe original ELF training (See Tab. 7), with 0.1 warmup epoch. Similar to ELF, we use training-timeCFG with self-conditioning: a CFG scale is sampled for each example, and the teacher and studentare conditioned on the same self-conditioning CFG scale. We use the same logit-normal schedule tosample time steps for both the student model and the teacher model.
+  [108,543] During inference, we use the SDE-inspired sampler with the same logit-normal time schedule usedduring training. For 1-, 2-, 4-, and 8-step generation, we set the noise reinjection scale to γ = 1.5and the self-conditioning CFG scale to 2.5. For 16- and 32-step generation, we use γ = 2.0 and aself-conditioning CFG scale of 2.0.
+  [108,592] For the self-conditioning CFG sweep in Fig.9c, we sweep the self-conditioning CFG scale from 0.5to 3.0 while fixing γ = 1.5, and report only configurations with entropy greater than 5.0 to excludedegenerate, repetitive text. To study the effect of curriculum distillation in Tab. 5, we fix γ = 1.5 andthe self-conditioning CFG scale to 2.5.
+  [108,649] B.3Results
+  [107,669] Few-step generation.Fig. 9a compares ELF+PD with representative distilled discrete and continu-ous DLM baselines on OpenWebText: distilled versions of the discrete models (MDLM+SDTT [63,13] and Duo+DCD [64]), and the continuous flow-based model (FMLM [35]). ELF+PD achievesthe lowest generative perplexity at every sampling budget while maintaining reasonable entropy.Benefiting from the data efficiency of ELF, ELF+PD also uses substantially fewer training tokens
+  [301,742] 19
+  --- layout: single
+
+======================================================================
+PAGE 20  (w=612 h=792)
+  [217,76] RoundStudent steps NTeacher substeps
+  [225,91] r1164r288r3416r4232r5164
+  [108,147] Table 3: ELF+PD distillation curriculum. Each round halves the number of student steps whilekeeping a fixed 64-step teacher. Each step of an N-step student matches 64/N teacher substeps.
+  [115,189] 350
+  [205,193] MDLM + SDTTDuo + DCDFMLMELF + PDDataset
+  [407,194] 1 step2 steps4 steps8 steps16 steps32 steps
+  [273,194] Base trainingExtra distillation
+  [170,194] 5.4
+  [384,195] 200
+  [250,195] 700
+  [115,201] 300
+  [384,205] 175
+  [289,205] 550B (12.2x)550B (12.2x)577B (12.8x)
+  [250,206] 600
+  [170,208] 5.4
+  [243,211] Training Tokens (B)
+  [115,213] 250
+  [384,215] 150
+  [250,217] 500
+  [108,224] Gen. PPL 
+  [377,224] Gen. PPL 
+  [115,225] 200
+  [384,225] 125
+  [250,228] 400
+  [130,228] 5.2
+  [384,235] 100
+  [150,237] 5.25.3
+  [115,237] 150
+  [250,238] 300
+  [187,240] 5.4
+  [126,244] 5.3
+  [386,245] 75
+  [182,248] 5.4
+  [115,249] 100
+  [250,249] 200
+  [210,250] 5.45.4
+  [192,254] 5.45.35.2
+  [386,255] 50
+  [264,258] 90B (2.0x)
+  [150,260] 5.2
+  [250,260] 100
+  [118,261] 50
+  [210,263] 5.45.3
+  [129,264] 5.25.15.15.05.4
+  [386,266] 25
+  [254,271] FMLM0
+  [267,273] ELF(+ PD)
+  [291,273] MDLM(+ SDTT)
+  [319,273] Duo(+ DCD)
+  [128,274] 12481632Sampling Steps
+  [411,274] 5.15.25.35.45.5Entropy 
+  [176,286] (a)
+  [310,286] (b)
+  [445,286] (c)
+  [108,301] Figure 9: ELF with progressive distillation (ELF+PD) vs. distilled DLM baselines on OpenWeb-Text. (a) Generative perplexity against sampling steps: ELF+PD outperforms distilled baselinesacross all sampling steps. Per-point labels indicate entropy. (b) Estimated training tokens: ELF+PDuses only 90B tokens (2.0× the base model training), while other baselines require 550–577B (12×+)training tokens. (c) Generative perplexity–entropy trade-off of ELF+PD across different numbers ofsampling steps, obtained by sweeping the self-conditioning CFG scale. The trade-offs are comparableacross 8–32 steps, while using fewer than 8 steps leads to degraded performance.
+  [138,393] StepsMDLM + SDTT [63, 13]Duo + DCD [64]FMLM [35]ELF + PD (Ours)
+  [161,406] Gen. PPL ↓Entropy ↑Gen. PPL ↓Entropy ↑Gen. PPL ↓Entropy ↑Gen. PPL ↓Entropy ↑
+  [143,419] 11260.605.265743.906.02168.305.17136.105.262877.225.34891.165.41133.295.2568.255.244339.735.38250.865.37111.315.2634.335.168112.665.41118.215.4186.505.3623.185.071657.745.3978.745.4363.635.2922.125.063240.415.3463.985.4045.095.2521.325.04
+  [108,476] Table 4: Few-step unconditional generation on OpenWebText. We compare ELF+PD after five-round distillation with distilled discrete and continuous diffusion language model baselines.
+  [108,527] than the baselines, as shown in Fig. 9b. Exact numbers are reported in Tab. 4. We also compare thegenerative perplexity–entropy trade-off of ELF+PD under different numbers of sampling steps inFig. 9c. The trade-offs are comparable across 8–32 steps, while using fewer than 8 steps leads todegraded performance.
+  [108,583] Effect of distillation curriculum.As described above, we use a five-round curriculum to progres-sively distill the teacher into a one-step student. Each round halves the number of student steps anddoubles the number of teacher substeps per interval. Tab. 5 shows the student’s performance acrossthe curriculum. Early-round models perform well only with larger sampling budgets and collapse todegenerate outputs at smaller budgets, whereas later-round models substantially improve 1–4-stepgeneration while maintaining reasonable entropy. After the final round, the one-step student achievesthe best 1-, 2-, 4-, and 8-step generative perplexity; see qualitative examples in Sec. F.4.
+  [301,742] 20
+  --- layout: single
+
+======================================================================
+PAGE 21  (w=612 h=792)
+  IMG xref=1666 at Rect(316.4354248046875, 534.2337036132812, 321.287353515625, 540.719482421875) saved=page21_img06.png
+  IMG xref=1667 at Rect(156.37088012695312, 559.0380249023438, 174.93698120117188, 568.0487670898438) saved=page21_img07.png
+  IMG xref=1667 at Rect(461.2510070800781, 499.1313781738281, 478.6783752441406, 507.5975341796875) saved=page21_img08.png
+  IMG xref=1668 at Rect(156.37088012695312, 610.4784545898438, 172.4615020751953, 620.2318725585938) saved=page21_img09.png
+  IMG xref=1668 at Rect(485.8572998046875, 498.8838195800781, 500.0665588378906, 507.4985046386719) saved=page21_img10.png
+  [130,76] Roundstep = 1step = 2step = 4step = 8
+  [158,88] Gen. PPL ↓Entropy ↑Gen. PPL ↓Entropy ↑Gen. PPL ↓Entropy ↑Gen. PPL ↓Entropy ↑
+  [136,100] r14.91.72∗119.45.10143.45.3758.05.26r21.70.64∗171.15.24128.65.4036.65.24r330.73.60∗153.15.4469.05.3727.95.20r4165.95.3592.25.3646.15.2827.35.19r5136.15.2668.25.2434.35.1623.25.07
+  [108,151] Table 5: Results across ELF with progressive distillation rounds and sampling steps. Early-roundstudents collapse at smaller sampling budgets, while later-round students substantially improvefew-step performance. ∗indicates degenerate results, i.e., entropy below 5.0.
+  [108,210] CMethod Details
+  [108,234] C.1Training
+  [108,254] We show the full training pipeline in Fig. 10. The input tokens are first encoded into clean embeddingsx, which then go through three key steps before being fed into the ELF model: corruption, self-conditioning, and adding control tokens for conditioning and guidance. In the denoising branch, themodel predicts clean embeddings ˆx and is supervised with LMSE. In the decoding branch, the sameshared-weight network predicts embeddings that are then passed through an unembedding layer andsupervised with LCE. The full training algorithm is shown in Alg. 3 and Alg. 4.
+  [108,332] Embedding corruption.First, we corrupt the clean embeddings x by adding noise. Specifically,we use zt = tx + (1 −t)ϵ to obtain noisy embeddings zt, where ϵ is Gaussian noise and t is thetime step. Before corruption, we first normalize the clean embeddings using the estimated mean andstandard deviation from the OWT dataset. We use different noise schedules for different modes.
+  [108,381] For the denoising branch, we sample the time step t from a logit-normal distribution for each sequence.Specifically, we draw t′ ∼N(Pmean, P 2
+  [108,390] std) and map it to the unit interval via t = σ(t′), where σ(·)denotes the sigmoid function. In all experiments, we use Pmean = −1.5 and Pstd = 0.8. We rescalethe Gaussian noise by a factor of 2.
+  [108,430] For the decoding branch, we train final-step discretization by conditioning the model on the decodermode, i.e., t = 1. At this time step, zt corresponds to clean embeddings. Therefore, to make the
+  [305,461] Ǟǘ
+  [237,461] Ǟǘ
+  [179,461] ǜǜ
+  [115,473] input tokens
+  [125,475] Ǘ1Ǘ2
+  [327,492] add control
+  [202,493] corrupt
+  [259,493] self-conditon
+  [148,494] embedELF
+  [124,498] Ǘǒ....
+  [IMG-BLOCK bbox=(485.9, 498.9, 500.1, 507.5)]
+  [IMG-BLOCK bbox=(461.3, 499.1, 478.7, 507.6)]
+  [480,499] or
+  [368,502] ....
+  [301,520] Ǟǘ
+  [122,524] Ǟǘcorruptself-conditionadd control
+  [IMG-BLOCK bbox=(316.4, 534.2, 321.3, 540.7)]
+  [375,544] Ǟǘ
+  [222,546] Ǟǘ
+  [130,551] ǜ
+  [IMG-BLOCK bbox=(156.4, 559.0, 174.9, 568.0)]
+  [458,566] time embed
+  [300,569] Ǟǘ
+  [317,569] ǜ’
+  [242,577] add conditionproject
+  [462,584] CFG scale
+  [456,602] model mode
+  [IMG-BLOCK bbox=(156.4, 610.5, 172.5, 620.2)]
+  [108,643] Figure 10: Illustration of our training pipeline. Starting from the clean embeddings x, we applydifferent noise schedules in the two modes to obtain corrupted embeddings zt. We then apply self-conditioning by concatenating either 0 or the previous prediction ˆx′ along the channel dimension, andproject the concatenated embeddings back to the original dimension to form ˆzt. Next, we prependcontrol tokens to the embedding sequence, including time tokens in [0, 1], CFG scale tokens in[0.5, 5], and model-mode tokens indicating either denoising or decoding. The resulting sequenceis fed into ELF to produce the final prediction ˆx, which is supervised using either a denoising lossLMSE or a token-wise cross-entropy loss LCE.
+  [301,742] 21
+  --- layout: single
+
+======================================================================
+PAGE 22  (w=612 h=792)
+  [108,86] Algorithm 3 ELF denoiser training with conditioning and guidance.
+  [108,107] # net(z, t, c, w, mode): ELF network with in-context conditioning# self_cond_proj(z): Self-conditioning projection layer that converts concatenated
+  [108,126] embeddings back to the original embedding dimension# self_cond_prob: Self-conditioning probability# s: a sequence of discrete tokens# c: condition (only for conditional generation)
+  [108,176] x = encode(s)t = sample_t()w = sample_sc_cfg_scale()e = randn_like(x)z = t * x + (1 - t) * ev = x - e
+  [108,246] # z w/o self-conditioningz_no_sc = self_cond_proj(concat([z, zeros_like(z)], dim=-1))x_no_sc = net(z_no_sc, t, c, w, mode="denoise")v_no_sc = (x_no_sc - z) / (1 - t)
+  [108,296] # z w/ self-conditioningz_sc = self_cond_proj(concat([z, stopgrad(x_no_sc)], dim=-1))x_sc = net(z_sc, t, c, w, mode="denoise")v_sc = (x_sc - z) / (1 - t)
+  [108,346] # Compute CFG targetv_target = v + (1 - 1 / w) * (v_sc - v_no_sc)
+  [108,376] # Apply per-example self-conditioning maskself_cond_mask = uniform(x.shape[0]) < self_cond_probv_pred = where(self_cond_mask, v_sc, v_no_sc)v_target = where(self_cond_mask, v_target, v)v_target = stopgrad(v_target)
+  [108,435] # Compute v-lossloss = mse_loss(v_pred, v_target)
+  [108,490] final-step input nontrivial, we corrupt the clean embeddings with a per-token corruption level psampled from a different noise schedule. Specifically, we draw p from a logit-normal distribution withPmean = 0.8 and Pstd = 0.8, and form ˜z = px+(1−p)ϵ, multiplying ϵ by a noise scale. We use noisescales of 5 and 1 for OWT and conditional generation tasks, respectively. As a result, the corruptionlevel varies across tokens within the same sequence. This design encourages the shared-weightdecoder mode to recover corrupted embeddings from their surrounding context, making final-stepdiscretization more robust to imperfect embeddings produced by the denoiser at inference time.
+  [108,584] Self-conditioning.We apply self-conditioning following prior work [10]. During training, witha certain probability, we perform an additional forward pass to obtain the predicted embeddings
+  [108,604] ˆx′, which are concatenated with the noisy embeddings zt along the channel dimension. We stopthe gradient through the predicted embeddings ˆx′. For the remaining examples, we concatenate ztwith all-zero embeddings 0 instead. Since this concatenation doubles the channel dimension, weproject it back to the original dimension using a linear layer. We apply self-conditioning with ˆx′in the denoising branch with 50% probability. For the decoding branch, we always use 0 as theself-conditioning input, as shown in Alg. 4.
+  [108,689] Training-time CFG.As discussed in Sec. 3.3, our model performs training-time CFG [18, 19, 9, 78]with self-conditioning. In training-time CFG, the network is designed to model the post-combinationquantity vcfg
+  [149,712] θ , rather than the pre-combination quantity vθ. Following [18, 19], the regression target
+  [301,742] 22
+  --- layout: single
+
+======================================================================
+PAGE 23  (w=612 h=792)
+  [108,86] Algorithm 4 ELF decoder training with conditioning and guidance.
+  [108,107] # net(z, t, c, w, mode): ELF network with in-context conditioning# self_cond_proj(z): Self-conditioning projection layer that converts concatenated
+  [108,126] embeddings back to the original embedding dimension# s: a sequence of discrete tokens# c: condition (only for conditional generation)
+  [108,166] x = encode(s)p = sample_per_token_p()w = sample_sc_cfg_scale()e = randn_like(x)z = p * x + (1 - p) * e
+  [108,226] # use z w/o self-conditioningz = self_cond_proj(concat([z, zeros_like(z)], dim=-1))h = net(z, t=1, c, w, mode="decode")s_pred = unembed(h)loss = ce_loss(s_pred, s)
+  [108,307] vtarget is now:
+  [242,326] 
+  [276,326]   
+  [250,326] 1 −1ω
+  [289,330] vcfg
+  [295,330] θ (zt | t, c, ω) −vcfg
+  [372,330] θ (zt | t, ∅, ω)
+  [433,332] 
+  [171,332] vtarget = x −ϵ +
+  [438,333] ,(5)
+  [108,357] where ω is the guidance scale. When ω = 1, this reduces to the case without training-time CFG.In this case, the loss becomes ∥vcfg
+  [108,367] θ (·) −vtarget∥2 [18, 19]. See Alg. 3. For each training example,we randomly sample a self-conditioning CFG scale w ∈[0.5, 5.0] from a power distribution biasedtoward smaller values [18, 19]. Since ELF uses x-prediction, the quantity v is always converted fromits x prediction counterpart (conditional or unconditional).
+  [108,420] Our model uses a diverse set of conditions. Standard diffusion models typically implement con-ditioning through adaLN-Zero [56], which combines all conditioning signals through summation.This design becomes less effective when many heterogeneous conditions are present. Therefore, weadopt in-context conditioning [19] by prepending a set of control tokens that encode the conditioninginformation. Each control-token embedding has the same dimensionality as a standard language-token embedding. We prepend three types of control tokens: 4 time tokens with values in [0, 1], 4CFG-scale tokens sampled from [0.5, 5], and 4 model-mode tokens indicating either denoising ordecoding. These tokens are jointly trained with the model. All continuous values, i.e., time and CFGscale, are encoded with positional embeddings.
+  [108,523] For conditional generation, we place the clean embeddings of the conditioning sequence immediatelyafter the control tokens and before the target sequence to be generated. The model then performsbidirectional self-attention over the concatenated sequence of conditioning and target tokens. Theconditioning embeddings are kept uncorrupted during training. To enable CFG for conditionalgeneration, we randomly drop the condition with 10% probability by zeroing out the embeddingsof the conditioning sequence. This allows the model to learn both conditional and unconditionalgeneration under the same framework.
+  [108,614] C.2Inference
+  [108,634] We show the full inference algorithm in Alg. 5. Since the self-conditioning CFG scale is providedthrough in-context conditioning, changing w does not require an additional inference pass. Bymodifying w as a model input, we can flexibly control the trade-off between generation quality anddiversity.
+  [108,690] Time schedule.We discretize the continuous time interval t ∈[0, 1] into T intervals using alogit-normal time schedule. Specifically, we sample T −1 time steps from the same logit-normaldistribution used for the denoising branch during training and sort them to form the intermediate
+  [301,742] 23
+  --- layout: single
+
+======================================================================
+PAGE 24  (w=612 h=792)
+  [108,86] Algorithm 5 ELF inference with conditioning and guidance.
+  [108,107] # net(z, t, c, w, mode): ELF network with in-context conditioning# self_cond_proj(z): Self-conditioning projection layer that converts concatenated
+  [108,126] embeddings back to the original embedding dimension# shape: embeddings shape# ts: discretized time grid over [0, 1] with N intervals# c: condition (only for conditional generation)# w: self-conditioning CFG scale
+  [108,186] z = randn(shape)x_pred = zeros(shape)
+  [108,216] for i in range(len(ts) - 1):
+  [125,226] t = ts[i]dt = ts[i + 1] - ts[i]# Self-condition on the previous predictionz_sc = self_cond_proj(concat([z, x_pred], dim=-1))x_pred = net(z_sc, t, c, w, mode="denoise")# convert x prediction to velocityv = (x_pred - z) / (1 - t)z = z + dt * v
+  [108,316] # decodingz = self_cond_proj(concat([z, zeros_like(z)], dim=-1))h = net(z, t=1, c, w, mode="decode")# unembeddingtoken_logits = unembed(h)tokens = argmax(token_logits)
+  [108,410] Algorithm 6 ELF inference with different samplers.
+  [108,431] # z: noisy embeddings of current time step# t: current time step# dt: time interval, t_next - t# gamma: controls the amount of noise added back in the SDE sampler
+  [108,480] def ode_step(z, t, dt):
+  [125,490] x_hat = net(z, t, mode="denoise")v = (x_hat - z) / (1 - t)z = z + dt * vreturn z
+  [108,540] def sde_step(z, t, dt, gamma):
+  [125,550] # Re-inject noise and move back to the corresponding time step# The jump size is defined relative to the time-step intervale = randn_like(z)alpha = 1 - gamma * dtt_back = alpha * tz_back = alpha * z + (1 - alpha) * e
+  [125,620] x_hat = net(z_back, t_back, mode="denoise")v = (x_hat - z) / (1 - t)z = z + dt * vreturn z
+  [108,690] points. We use Pmean = −1.5 and Pstd = 0.8 to match the training-time logit-normal distribution. Weensure that the first interval starts at t = 0 and the last interval ends at t = 1. This schedule producessmaller intervals when t is close to 0 and larger intervals as t approaches 1. It shows strong empirical
+  [301,742] 24
+  --- layout: single
+
+======================================================================
+PAGE 25  (w=612 h=792)
+  [108,74] performance, likely because the noisier regime requires finer discretization and the schedule bettermatches the noise distribution used during training.
+  [108,108] Samplers.Our method supports both deterministic ODE sampling and an SDE-inspired stochasticsampler. The main algorithm in Alg. 2 uses the ODE sampler for simplicity, while Alg. 6 summarizesone-step updates for both samplers.
+  [108,146] The SDE variant is motivated by the SDE associated with Flow Matching [48], whose dynamics can beinterpreted as injecting infinitesimal noise at each step. In practice, we adopt a simple approximationthat re-injects Gaussian noise at each sampling step while shifting the time variable slightly towardthe noise regime. We introduce a noise re-injection scale γ to control the amount of stochasticityadded at each step. The denoiser is then evaluated on this perturbed state, and its clean-embeddingprediction is used to update the original state. When γ = 0, no stochastic perturbation is applied, andthe update reduces to deterministic ODE sampling.
+  [108,235] CFG for conditional generation.We apply standard CFG by combining the conditional andunconditional predictions. Similarly, we use the CFG scale to control the guidance strength.
+  [108,272] DAdditional Ablations
+  [108,297] In this section, we present additional ablations of our design choices. Unless otherwise specified,all experiments use time schedule with either a 64-step ODE sampler or a 64-step SDE samplerwith γ = 1. As before, we evaluate the generative perplexity–entropy trade-off by varying theself-conditioning CFG scale. We use red to indicate regions with poor generation quality, i.e., entropybelow 5.0, which often corresponds to repetitive or degenerate sentences, or generative perplexityabove 300, which often corresponds to semantically meaningless or ungrammatical sentences. Allmodels are trained for the same number of steps, with all other configurations kept the same as thedefault setting.
+  [108,397] D.1Prediction Targets
+  [108,417] Our model directly predicts the clean embeddings x (x-prediction). This allows us to use a unifieddenoiser and decoder through weight sharing and jointly optimize the model with both the denoisingobjective LMSE and the token-level objective LCE. Prior work has also suggested that x-prediction isessential, as high-dimensional clean data tends to lie on a low-dimensional manifold [37].
+  [108,466] Here, we further study the effect of prediction targets. Specifically, since there are three quantitiesand two constraints: linear interpolation zt = t x + (1 −t) ϵ and flow velocity v = x −ϵ, thenetwork can be trained to predict one of these quantities, i.e., x-, v-, or ϵ-prediction. To study this ina controlled setting, we use a two-stage pretrained encoder-decoder setup: a pretrained T5 encodermaps tokens into continuous embeddings, and a decoder is trained to reconstruct masked and noisyembeddings (See Sec. E.3 for details). We train only the denoising model while keeping both theencoder and decoder fixed. We use adaLN-Zero conditioning and a 64-step ODE sampler to plot thegenerative perplexity–entropy trade-off curve.
+  [108,559] To study how prediction targets behave as the embedding dimension increases, we consider T5-small,T5-base, and T5-large encoders, corresponding to embedding dimensions of 512, 768, and 1024,respectively. We set the bottleneck dimension equal to the corresponding input embedding dimension.As shown in Fig. 11, x-prediction remains the most stable across all dimensions, maintaining areasonable generative perplexity–entropy trade-off even at 1024 dimensions. In contrast, v-predictionis competitive at 512 dimensions but degrades as the dimension increases, with substantially highergenerative perplexity at 768 and 1024 dimensions. ϵ-prediction collapses across all dimensions, eitherachieving extremely low entropy or high generative perplexity, indicating repetitive, degenerate, orungrammatical generations. These results support the hypothesis that clean-data prediction is bettersuited to high-dimensional language representations, consistent with findings from prior work [37].
+  [108,681] D.2Bottleneck
+  [108,701] Our model uses a bottleneck design that projects encoder representations into a lower-dimensionalspace before mapping them back to the model hidden size. This design is motivated by the hypothesis
+  [301,742] 25
+  --- layout: single
+
+======================================================================
+PAGE 26  (w=612 h=792)
+  [160,72] Dimension=512
+  [294,72] Dimension=768
+  [426,72] Dimension=1024
+  [384,78] 800
+  [137,82] x-prediction
+  [271,82] x-prediction
+  [480,82] x-prediction
+  [115,85] 500
+  [249,86] 500
+  [137,87] v-prediction
+  [271,87] v-prediction
+  [480,87] v-prediction
+  [384,89] 700
+  [139,93] -prediction
+  [273,93] -prediction
+  [482,93] -prediction
+  [384,101] 600
+  [115,101] 400
+  [249,101] 400
+  [384,112] 500
+  [108,114] Gen. PPL 
+  [242,114] Gen. PPL 
+  [376,114] Gen. PPL 
+  [249,116] 300
+  [115,117] 300
+  [384,123] 400
+  [249,131] 200
+  [115,133] 200
+  [384,135] 300
+  [384,146] 200
+  [249,146] 100
+  [115,150] 100
+  [384,157] 100
+  [254,162] 0
+  [130,166] 5.25.35.45.55.65.75.8Entropy 
+  [267,166] 2.53.03.54.04.55.05.5Entropy 
+  [401,166] 5.15.25.35.45.55.65.7Entropy 
+  [176,177] (a)
+  [310,177] (b)
+  [445,177] (c)
+  [108,191] Figure 11: Effects of prediction targets. We vary the input dimension from 512 to 768 and 1024by using T5-small, T5-base, and T5-large encoders, respectively. Across all input dimensions,x-prediction remains stable and performs well. In contrast, v-prediction performs well at 512dimensions but degrades at higher dimensions, while ϵ-prediction collapses across all dimensionsfrom 512 to 1024. The red region indicates poor-quality generations, where entropy falls below 5(e.g., repetitive sentences) or generative perplexity exceeds 300 (e.g., meaningless or ungrammaticalsentences). This aligns with the hypothesis from prior work that high-dimensional clean data oftenlies on a low-dimensional manifold [37].
+  [231,297] ODE
+  [383,297] SDE
+  [319,306] 60
+  [165,306] 140
+  [188,307] 32128512
+  [339,307] 32128512
+  [165,319] 120
+  [319,323] 50
+  [165,332] 100
+  [319,340] 40
+  [158,340] Gen. PPL 
+  [312,340] Gen. PPL 
+  [167,345] 80
+  [319,356] 30
+  [167,358] 60
+  [167,371] 40
+  [319,373] 20
+  [167,384] 20
+  [319,389] 10
+  [182,394] 4.95.05.15.25.35.45.55.6Entropy 
+  [328,394] 4.74.84.95.05.15.25.3Entropy 
+  [234,407] (a)
+  [386,407] (b)
+  [108,422] Figure 12: Effect of bottleneck dimension. We compare bottleneck dimensions of 32, 128, and 512under ODE and SDE sampling. A moderate bottleneck dimension of 128 provides the best generativeperplexity–entropy trade-off, while overly small or large bottlenecks either reduce diversity or hurtgenerative perplexity. Red indicates regions with poor generation quality, i.e., entropy below 5.
+  [107,494] that natural data may lie on a low-dimensional manifold within the high-dimensional embeddingspace. We compare bottleneck dimensions of 32, 128, and 512, and show the results in Fig. 12.The bottleneck dimension has a clear effect on the generative perplexity–entropy trade-off. UnderODE sampling, all three bottleneck sizes follow a similar frontier, but smaller bottlenecks tend toreach lower generative perplexity at the cost of lower entropy. Under SDE sampling, the differencesbecome more significant: the 32-dimensional bottleneck achieves the lowest generative perplexitybut often lies in the low-entropy region, indicating reduced diversity, whereas the 512-dimensionalbottleneck maintains higher entropy but suffers from substantially worse generative perplexity. The128-dimensional bottleneck provides the best overall balance, achieving strong generative perplexitywhile preserving reasonable entropy. We therefore use a bottleneck dimension of 128 as the defaultsetting. This finding is also consistent with prior work [37], which observes that an appropriatebottleneck can improve performance.
+  [108,646] D.3Denoising Mode Probability
+  [108,669] Since ELF is trained with both MSE and CE losses through a shared-weight denoiser-decoder, eachtraining step is assigned to either denoising mode or decoding mode. The denoising-mode probabilitycontrols this allocation: a higher probability emphasizes learning the continuous denoising dynamics,while a lower probability provides more supervision for mapping embeddings back to tokens. Westudy this trade-off by varying the denoising-mode probability during training.
+  [301,742] 26
+  --- layout: single
+
+======================================================================
+PAGE 27  (w=612 h=792)
+  [232,72] ODE
+  [382,72] SDE
+  [166,80] 120
+  [319,82] 45
+  [191,83] Denoising mode prob = 0.8Denoising mode prob = 0.5Denoising mode prob = 0.2
+  [341,83] Denoising mode prob = 0.8Denoising mode prob = 0.5Denoising mode prob = 0.2
+  [166,96] 100
+  [319,98] 40
+  [168,113] 80
+  [319,114] 35
+  [157,115] Gen. PPL 
+  [319,130] 30
+  [168,130] 60
+  [319,146] 25
+  [168,147] 40
+  [319,162] 20
+  [168,163] 20
+  [189,169] 5.05.15.25.35.45.5Entropy 
+  [335,169] 5.05.15.25.3Entropy 
+  [235,182] (a)
+  [386,182] (b)
+  [108,197] Figure 13: Effect of the denoising mode probability during training. This probability controls theallocation between denoising and decoding updates in the shared-weight denoiser-decoder model. Adenoising mode probability of 0.8 provides the best generative perplexity–entropy trade-off acrossboth ODE and SDE samplers.
+  [157,254] ODE
+  [249,254] SDE
+  [363,254] ODE
+  [455,254] SDE
+  [116,259] 80
+  [207,259] 80
+  [322,259] 80
+  [413,259] 80
+  [135,264] In-contextAdaLN-Zero
+  [227,264] In-contextAdaLN-Zero
+  [341,264] MuonAdamW
+  [433,264] MuonAdamW
+  [116,272] 70
+  [207,272] 70
+  [322,272] 70
+  [413,272] 70
+  [116,284] 60
+  [207,284] 60
+  [322,284] 60
+  [413,284] 60
+  [116,297] 50
+  [207,297] 50
+  [322,297] 50
+  [413,297] 50
+  [108,297] Gen. PPL 
+  [314,297] Gen. PPL 
+  [116,309] 40
+  [207,309] 40
+  [322,309] 40
+  [413,309] 40
+  [116,322] 30
+  [207,322] 30
+  [322,322] 30
+  [413,322] 30
+  [116,334] 20
+  [207,334] 20
+  [322,334] 20
+  [413,334] 20
+  [116,347] 10
+  [207,347] 10
+  [322,347] 10
+  [413,347] 10
+  [136,350] 5.25.35.4Entropy 
+  [218,350] 5.15.25.3Entropy 
+  [333,350] 5.15.25.35.4Entropy 
+  [420,350] 5.15.2Entropy 
+  [161,364] (a)
+  [252,364] (b)
+  [367,364] (a)
+  [458,364] (b)
+  [108,378] Figure 14: Effect of conditioning strategies.We compare in-context conditioning with adaLN-Zero conditioning.In-context conditioningslightly improves performance while substan-tially reducing the number of model parameters.
+  [314,378] Figure 15: Effect of optimizers. We comparegeneration quality under different optimizers us-ing Muon and AdamW. Muon achieves lowergenerative perplexity at comparable entropy un-der both ODE and SDE sampling methods.
+  [108,456] As shown in Fig. 13, assigning a low probability to the denoising mode consistently degrades thegenerative perplexity–entropy trade-off, especially under SDE sampling. This suggests that the modelrequires sufficient training on the denoising process. Among the configurations tested, a denoisingmode probability of 0.8 achieves the best overall trade-off across both ODE and SDE samplers. Wetherefore use 0.8 as the default denoising mode probability in our main experiments.
+  [108,526] D.4Conditioning Strategies
+  [108,546] As discussed in Sec. 3.3, our model is conditioned on the time step, CFG scale, and model mode.We use in-context conditioning for these signals by prepending them as condition tokens to theinput sequence, allowing the model to attend to them through full attention. This differs fromthe conventional adaLN-Zero conditioning design, which typically introduces additional modelcomponents to process the conditioning inputs. We compare these two designs in Fig. 14. In-contextconditioning performs slightly better while avoiding the substantial parameter overhead introduced byadaLN-Zero (ELF-B’s parameter count is reduced from 148M to 105M). Therefore, we use in-contextconditioning as our default setting.
+  [108,648] D.5Optimizers
+  [108,669] We evaluate the impact of optimizer choice, comparing Muon [33] and AdamW [44], and show theresults in Fig. 15. We tune the hyperparameters for both optimizers to obtain their best performance:for Muon, we use a learning rate of 2 × 10−3; for AdamW, we use a learning rate of 1 × 10−4with β1 = 0.9 and β2 = 0.95. During training, Muon achieves lower loss within the same numberof steps. During inference, models trained with Muon consistently achieve a better generative
+  [301,742] 27
+  --- layout: single
+
+======================================================================
+PAGE 28  (w=612 h=792)
+  [165,75] 500
+  [250,76] Logit-normal time scheduleUniform time schedule
+  [319,78] 70
+  [430,88] =0
+  [165,92] 400
+  [319,92] 60
+  [427,95] =0.1
+  [319,107] 50
+  [165,110] 300
+  [157,112] Gen. PPL 
+  [312,112] Gen. PPL 
+  [319,121] 40
+  [405,122] =0.5
+  [165,128] 200
+  [385,133] =0.75=1
+  [319,135] 30
+  [165,146] 100
+  [347,149] =1.5=2
+  [319,150] 20
+  [280,155] H=5.22
+  [280,162] H=5.11
+  [169,164] 0
+  [319,164] 10
+  [178,167] 81632641282565121024Sampling Steps
+  [323,167] 5.05.15.25.35.45.5Entropy 
+  [233,180] (a)
+  [385,180] (b)
+  [108,194] Figure 16: Effect of time schedule and SDE noise re-injection scale. (a) Logit-normal timeschedule consistently improves generative perplexity across different sampling budgets, especially inthe few-step regime. (b) The SDE noise re-injection scale γ controls the generative perplexity–entropytrade-off by adjusting the amount of stochastic noise injected during sampling.
+  [229,250] De-En
+  [383,250] XSum
+  [165,262] 26.0
+  [318,267] 27.6
+  [165,277] 24.0
+  [311,286] ROUGE-L 
+  [318,287] 27.2
+  [158,290] BLEU 
+  [165,292] 22.0
+  [318,307] 26.8
+  [165,307] 20.0
+  [165,322] 18.0
+  [318,327] 26.4
+  [179,336] 1234CFG
+  [332,336] 1234CFG
+  [235,346] (a)
+  [387,346] (b)
+  [108,361] Figure 17: Effect of CFG scale on conditional generation. We sweep the CFG scale on WMT14 De-En translation and XSum summarization. Moderate guidance substantially improves task performance,with CFG scale 2 achieving the best result on both tasks, while overly strong guidance slightlydegrades performance.
+  [108,426] perplexity–entropy trade-off than those trained with AdamW under both samplers. The improvementis especially significant under SDE sampling, where Muon achieves lower generative perplexity at thesame entropy level. These results highlight the importance of optimizer choice. Nevertheless, modelstrained with both optimizers still outperform other baselines, suggesting that the strong performanceof ELF cannot be attributed to the optimizer alone.
+  [108,494] D.6Sampling Methods
+  [108,514] We study two sampling design choices that improve inference efficiency and generation quality:sampling time schedule and stochastic SDE-inspired sampling. The logit-normal time scheduleimproves sampling efficiency by reducing the required number of denoising steps, while the SDEnoise re-injection scale provides additional control over the generative perplexity–entropy trade-off.
+  [108,569] Time schedules.By default, we use a logit-normal time schedule during inference [34]. We alsoevaluate an alternative uniform schedule. Fig. 16a shows the effect of the time schedule on ODEsampling across different numbers of sampling steps. Across all step counts, the logit-normal scheduleconsistently reduces generative perplexity compared with the uniform schedule. This improvementis especially significant in the few-step regime. These results suggest that the logit-normal timeschedule improves sampling efficiency and final sample quality, likely because it better aligns theinference-time trajectory with the training-time schedule and allocates more sampling steps to noisiertime steps.
+  [108,669] SDE noise re-injection scale.For SDE sampling, we introduce a noise re-injection scale hyperpa-rameter γ that controls the amount of stochasticity injected at each sampling step, as discussed inSec. C.2. Intuitively, increasing γ introduces more stochasticity, while γ = 0 reduces to deterministicODE sampling. As shown in Fig. 16b, γ controls the generative perplexity–entropy trade-off: withina moderate range, larger γ leads to lower generative perplexity while slightly reducing entropy.
+  [301,742] 28
+  --- layout: single
+
+======================================================================
+PAGE 29  (w=612 h=792)
+  [108,74] We hypothesize that the noise re-injection process helps correct early denoising errors, rather thandeterministically amplifying imperfect trajectories as in ODE sampling. We therefore choose γ = 1.0as our default setting, which provides a strong balance between generative perplexity and entropy.
+  [108,121] D.7CFG on Conditional Generation
+  [108,141] We further study the effect of CFG scale on conditional generation tasks. As shown in Fig. 17,increasing the CFG scale from 1 to 2 substantially improves performance on both WMT14 De-Enand XSum, suggesting that stronger conditioning helps the model better follow the source input.However, further increasing the scale leads to a gradual decline in performance, indicating that overlystrong guidance can hurt generation quality. Based on this trend, we use CFG scale 2 as the defaultsetting for conditional generation.
+  [108,223] EExperimental Details
+  [108,248] E.1Model Architecture
+  [108,268] Our model uses a standard Diffusion Transformer architecture [56]. We also incorporate pop-ular general-purpose improvements, including SwiGLU [69], RMSNorm [89], RoPE [76], andqk-norm [28]. We use in-context conditioning instead of adaLN-Zero [56] conditioning, which allowsus to significantly reduce the number of parameters; for example, the ELF-B model size is reducedfrom 148M to 105M parameters. Tab. 6 summarizes the configurations of ELF across different modelsizes. We report the Transformer depth, hidden size, number of attention heads, and parameter count.We also report the number of training epochs used on the OWT dataset for each variant. Largermodels tend to learn faster in our setup, and therefore require fewer training epochs.
+  [108,369] E.2Hyperparameters
+  [108,389] ELF pipeline hyperparameters.Tab. 7 summarizes the main hyperparameters used in the ELFpipeline, covering model architecture, diffusion settings, conditioning and guidance, and optimizationdetails. Unless noted otherwise, all experiments in the paper follow this default configuration. Weinclude these settings for completeness and to facilitate reproducibility.
+  [107,446] Inference-time settings for system-level comparison.For system-level comparison in Fig. 7, weuse SDE sampling with time schedule enabled for all step budgets. We set the CFG scale to 3 for 8-,16-, and 32-step generation. For SDE sampling, we use a stronger noise injection scale of γ = 2 inthe very few-step regimes of 8 and 16 steps, and reduce it to γ = 1.5 for 32 steps, as longer denoisingtrajectories require less stochastic correction. For the system-level comparison in Tab. 1, we use64-step ODE sampling with time schedule. We set the self-conditioning CFG scale to 1 and theinput-condition CFG scale to 2.
+  [108,535] Training-token budget for system-level comparison.Tab. 8 reports the estimated effective trainingtokens used by ELF and each baseline in Fig. 7c. We estimate base-training tokens as batch size ×steps × sequence length and add distillation or flow-map stages on top where applicable. The OWTdataset contains roughly 9.04B tokens. With our default training schedule of 5 epochs, ELF thereforeuses 45.2B effective training tokens. Thus, ELF requires roughly an order of magnitude fewereffective training tokens than the compared DLMs.
+  [108,614] E.3Ablation Studies Setting
+  [108,634] We evaluate several choices of embedding representations for ELF, and report the implementationdetails as below. We also try two-stage training with a separate decoder. Unless specified, we keepother settings the same as the default ELF configuration.
+  [108,680] Scratch encoder.We train an encoder from scratch on OpenWebText [20] by following the originalT5-small training pipeline [60]. The encoder is trained for 5 epochs with a learning rate of 1 × 10−3,cosine learning rate schedule, 0.4 epoch warmup, and a batch size of 512. During ELF training, weapply channel-wise normalization to the encoder outputs.
+  [301,742] 29
+  --- layout: single
+
+======================================================================
+PAGE 30  (w=612 h=792)
+  [162,76] ModelDepthHidden size# HeadsParamsTraining epochs
+  [162,91] ELF-B1276812105M5ELF-M24105616342M4ELF-L32128016652M3
+  [186,127] Table 6: ELF Model configurations across different scales.
+  [184,164] Model ArchitectureDenoising and Decoding Config
+  [144,180] ModelELF-BTime schedulelogit normalModel size105MDenoiser (Pmean, Pstd)(−1.5, 0.8)Encoder backboneT5-smallDenoiser noise scale2.0Embedding dimension512Decoder (Pmean, Pstd)(0.8, 0.8)Bottleneck dimension128Decoder noise scale5.0Model dimension768Denoiser vs. decoder prob.0.8 vs. 0.2Sequence length1024
+  [169,266] Conditioning and GuidanceOptimization and Training
+  [144,282] Self-conditioning probability0.5OptimizerMuonSelf-conditioning CFG range[0.5, 5]Learning rate0.002Num. of time tokens4Weight decay0Num. of model-mode tokens4Training epochs5Num. of CFG tokens4Global batch size512SDE γ1.0Learning rate scheduleconstantWarmup epochs0.5EMA decay0.9999Training deviceTPU v5p × 64Training time1.5 h per epoch
+  [108,402] Table 7: Default training hyperparameters and setup for ELF-B on the OpenWebText dataset.Unless noted otherwise, all experiments in the paper follow this default configuration.
+  [108,446] Pretrained embedding layer.We use the frozen embedding table from the T5-small encoder asthe token embedding layer. The embedding layer matrix is normalized, and the unembedding layer istrained separately.
+  [108,494] Gaussian embedding layer.We randomly initialize and freeze an embedding layer from a Gaussiandistribution, with token-wise embedding mean 0 and standard deviation 1. The unembedding layer istrained separately using the decoder mode.
+  [108,541] Learnable embedding layer.We jointly train the embedding layer together with the denoiser anddecoder modes. The unembedding layer is tied with the embedding layer: denoiser-mode updatesaffect the embedding layer, while decoder-mode updates affect the unembedding layer. To stabilizetraining, we apply normalization directly on the unembedding layer matrix at every step.
+  [108,599] Separate decoder.For the separate-decoder setting, we use a randomly initialized decoder architec-ture obtained by mirroring the T5-small encoder. We keep the encoder fixed, mask 20% of the inputtokens, and add logit-normal noise to the latent representations with Pmean = 0.5 and Pstd = 1.0.The model is trained for 3 epochs with a learning rate of 3×10−4 and a cosine learning-rate schedule.The relative noise scale with respect to the normalized latent representations is set to 5.0.
+  [108,670] E.4Reported Numbers
+  [108,690] System level comparison.Across 6 independent evaluation seeds, ELF shows highly consistentsystem-level behavior, as shown in Tab. 9. As the number of sampling steps increases from 8 to 32,the standard error (SE) decreases. The small standard errors—especially at 32 steps—suggest that
+  [301,742] 30
+  --- layout: single
+
+======================================================================
+PAGE 31  (w=612 h=792)
+  [125,76] MethodBase trainingDistillation trainingEffective tokensRatio
+  [125,90] MDLM [63]512 × 1M × 1024-524.3B11.6×Duo [64]512 × 1M × 1024-524.3B11.6×MDLM + SDTT [63]512 × 1M × 1024512 × 10K × 5 × 1024550.5B12.2×Duo + DCD [64]512 × 1M × 1024512 × 10K × 5 × 1024550.5B12.2×FLM [35]512 × 1M × 1024-524.3B11.6×FMLM [35]512 × 1M × 1024512 × 100K × 1024576.7B12.8×LangFlow [11]512 × 1M × 1024-524.3B11.6×
+  [125,165] ELF (ours)5 × 9.04B-45.2B1.0×
+  [108,187] Table 8: Estimated effective training tokens for ELF and the prior DLM baselines used in our system-level comparison (Fig. 7c). We estimate base-training tokens as batch size × steps × sequence length;distillation / flow-map stages are added on top where applicable.
+  [192,242] StepsSC CFGγGen. PPL ↓Entropy ↑
+  [204,257] 832.067.32 ± 2.255.14 ± 0.0851632.033.66 ± 1.095.16 ± 0.0263231.524.08 ± 0.165.15 ± 0.002
+  [108,298] Table 9: System-level ELF performance reported as mean ± standard error (SE) over 6 independentevaluation runs (seeds 0–5; n = 6).
+  [108,340] these gains are robust to random seed variation and that the overall trend is reliable across runs. SeeTab. 9 for detailed numbers.
+  [108,374] Scaling behavior with CFG scales.The default setting for both sampling methods uses 64 samplingsteps with time schedule. For the SDE sampler, we set γ = 1.0. The exact numbers are reported inTab. 10. Larger CFG scales improve generation quality by reducing Gen. PPL within a certain range.The effect of CFG scaling reverses beyond 3. Only ELF-L benefits from increasing the CFG scalefrom 3 to 4. Thus, in most default ablation studies, we only consider CFG scales from 0.5 to 3.
+  [108,442] E.5Conditional Generation
+  [108,463] Specifically, the WMT14 results for AR, MDLM, and E2D2 are taken from the E2D2 [4] paper, theSeqDiffuSeq result is taken from the LD4LG [46] paper, and the CDCD result is taken from theoriginal CDCD [15] paper. For reproduced results, Duo [64] is implemented using the Duo codebase4,while AR, MDLM, and E2D2 are reproduced using the E2D2 codebase5.
+  [108,512] For a fair comparison, we reproduce all baselines using settings that are as close as possible totheir original implementations, as summarized in Tab. 11. For AR, MDLM, and E2D2, we usethe E2D2 codebase and follow the training and evaluation configurations reported in the E2D2paper on XSum. Note that although E2D2 is primarily designed for semi-autoregressive generation,we find that MDLM also achieves its best performance under a semi-autoregressive setting (i.e.,block size 32 with two-block generation); using single-block diffusion without semi-autoregressivegeneration degrades performance. For Duo, we start from the official Duo repository and adapt it toour conditional generation setting by adding cross-attention conditioning and classifier-free guidance,and by using a T5-small encoder for the conditioning input. During inference, we generate withoutsemi-autoregressive decoding. We tune the main sampling and guidance hyperparameters and reportthe best reproduced results we obtain.
+  [119,703] 4https://github.com/s-sahoo/duo5https://github.com/kuleshov-group/e2d2
+  [301,742] 31
+  --- layout: single
+
+======================================================================
+PAGE 32  (w=612 h=792)
+  [159,90] SamplerSC CFGELF-B 105MELF-M 342MELF-L 652M
+  [231,105] Gen. PPLEntropyGen. PPLEntropyGen. PPLEntropy
+  [204,120] 0.536.775.2839.215.3537.505.411.029.505.2333.455.3031.825.371.525.255.1828.425.2628.725.352.022.535.1425.345.2326.475.323.019.725.1021.695.1823.315.283.537.565.3036.485.3422.285.274.036.505.2934.935.3321.375.26
+  [159,151] SDE
+  [204,197] 0.5104.295.5188.515.5168.275.521.065.305.4062.475.4449.725.451.544.855.3146.715.3739.975.402.034.655.2337.665.3233.725.363.026.625.1528.805.2426.575.29
+  [159,222] ODE
+  [108,257] Table 10: Scaling performance of generative perplexity (Gen. PPL) and unigram entropy for ELFmodels of different sizes under SDE and ODE samplers with 64 sampling steps. The effect ofself-conditioning (SC) CFG scaling diminishes beyond 3.
+  [125,337] ConfigARMDLME2D2Duo
+  [125,352] Architecture
+  [125,367] CodebaseE2D2E2D2E2D2DuoDuoTokenizerQwen3-0.6BQwen3-0.6BQwen3-0.6BT5-smallT5-smallHidden Size256256256768768Intermediate Size768768768––#Layers / Blocks2828enc=20, dec=81212Sequence Length6464646464Max Cond Length102410241024102464Cond Embed–––T5-smallT5-small
+  [125,454] Training
+  [125,469] DatasetXSumXSumXSumXSumDe-EnLearning Rate3e-43e-43e-43e-43e-4LR SchedulerconstconstconstconstconstWarmup Steps10001000100025002500Global Batch Size128128128512512OptimizerDecoupledAdamWDecoupledAdamWDecoupledAdamWAdamWAdamWLoss TypeNLLMDLM ELBOE2D2 ELBODuo ELBODuo ELBOTrain Steps500K500K500K1M1M
+  [125,556] Evaluation
+  [125,571] Sampling Strategygreedypredict_and_noisepredict_and_noiseDuo samplerDuo samplerSampling StepsL = 64 (AR)≈L (first-hit)≈L (first-hit)10001000Block size1328--CFG Scale–––1.01.5CheckpointbestbestbestbestbestEMAtruetruetruetruetrue
+  [108,642] Table 11: Detailed training and evaluation configurations for conditional generation tasks ofour reproduced AR, MDLM, E2D2, and Duo baselines. AR, MDLM, and E2D2 are reproducedon XSum using the E2D2 [4] codebase and follow the configurations reported in the E2D2 paper.For Duo, we build on the original Duo [64] repository, add cross-attention conditioning and CFG,adapt the T5-small encoder to match our setting, and tune the hyperparameters to obtain the strongestreproduced results.
+  [301,742] 32
+  --- layout: single
+
+======================================================================
+PAGE 33  (w=612 h=792)
+  [116,76] t = 0
+  [134,77] strength  will        building  building         building     building   back            played  playedband bit         choiceband  bitband  played  playedband  played  bit                    bit         
+  [IMG-BLOCK bbox=(116.8, 85.9, 123.7, 116.4)]
+  [IMG-BLOCK bbox=(116.8, 85.9, 123.7, 116.4)]
+  [134,91] The         results   was        ab                 disturbing  .               EFuture        after    watching     various  games          ,              I              was            pretty   fierce               withLI     
+  [134,106] The         results   were       flat                striking      .               Immediately  after   watched      the         games          ,             I              was             pretty   determined      with
+  [116,119] t = 1
+  [134,120] The         results   were       particularly   striking      .               Immediately  after   watching      the         games          ,             I             was              very      concerned      about
+  [108,138] Figure 18: Denoising trajectory of ELF-B. As t increases from 0 to 1, ungrammatical sentences areprogressively refined into fluent and grammatical text.
+  [108,181] FQualitative Examples
+  [108,206] F.1Denoising Trajectory
+  [108,226] Fig. 18 visualizes the intermediate predictions along ELF’s denoising process. Starting from repetitivetokens at t = 0, the model gradually forms semantically meaningful phrases, improves grammar, andrefines word choices as t approaches 1. This trajectory illustrates how continuous diffusion generationprogressively transforms noisy embeddings that decode to gibberish text into clean embeddings thatdecode to grammatical sentences.
+  [108,294] F.2Unconditional Generation Examples on OpenWebText
+  [108,314] We provide three unconditional samples generated by ELF-B on OpenWebText, reported with theirentropy and generative perplexity (Gen. PPL). The examples illustrate that ELF produces fluent,syntactically coherent, and topically consistent long-form text across diverse domains.
+  [118,362] ELF-B OWT
+  [118,381] Entropy: 5.36 Gen. PPL: 21.04
+  [118,401] The company has been developing a virtual sleep mode for its iPhone and iPadfor years. This means that users can improve their quality of life withoutturningping off their fingers thanks to Google’s new virtual sleep technology.To make the experience a reality, virtual sleep mode was developed for Google,using a new built-in technology that includes real-time photography and shadowmonitoring. This technology enables users to have a safe, comfortable look atwhere they sleep, even if you place the keyboard or a button under yourfingers. Some sources point to the iPhone 6 and iPhone 6 as yet anotherexample of the importance of virtual sleep mode in our everyday lives. Thistechnology has been shown to be useful when staying busy on tight days, duringdifficult times or lying asleep on a hot night. This technology could also beused to improve sleep quality and help users improve quality of life. Editor’snote: This post has been updated to answer to relevant questions. Google saysit will add virtual sleep mode to its iPhone and iPad in coming week. Googleannounced some good news Thursday morning, including instructions on when toeat, checking out, where to sleep and the rules surrounding what to eat. Thecompany reported a revenue of \$957 billion -- more than a third of the totalrevenue during the same period. But the company doesn’t seem to have a slew ofother good news yet, like the first one ...
+  [118,611] ELF-B OWT
+  [118,631] Entropy: 5.27 Gen. PPL: 21.29
+  [118,651] Balin said the potential cost of starting there is very low, and he told USA2Network in an interview that he is not only interested in expanding thecapacity of the university, but is also interested in expanding otherservices, including student assistance, community assistance, youthassistance, youth assistance, and social justice assistance. Balin said, \"Oneof the things about this is that it’s difficult to start, because if you’reunderfunded, you’re going to need all the services that you need, and that’s
+  [301,742] 33
+  --- layout: single
+
+======================================================================
+PAGE 34  (w=612 h=792)
+  [118,72] what you have to pay for. And it’s going to difficult, if nothing, for you toget the funding you need to start right there.\" The UDU has not made suchpromise. \"We have a lot of the guys in the department that are doing well, alot of the guys that aren’t doing well at the university and they’re currentlyunderfunded,\" Balin said. \"Most of the other LHS universities across thecountry are currently underfunded. So, what do you want them to do? You know,right now, the cost is very low and there are no great universities in therest of the country. It’s not going to be easy.\" In the meantime, Balin said,the UDU isn’t looking to attract high-quality...
+  [118,191] ELF-B OWT
+  [118,210] Entropy: 5.17 Gen. PPL: 21.80
+  [118,230] Hey, I grew up in Lyndon in the early ’90s and, after my father’s death, beganwriting a book about himself called The Life of Steve O’Malse. After hissecond year at the University of Chicago O’Malse decided to write a biobioabout his father. He finished his study at the University of Chicago in thefall of 1999. In 2009 he published a biobio called "My Dad And Daughter Whilehe Was Home," a successful biobio written by a former military officer, Lt.Gen. David Wilde. Steve O’Malse has had great national security experience.Throughout his career as a high-level national security adviser, he has servedas an adviser to George H.W. Bush and an adviser to two top FBI officials,John J. Tillerson and Michael E. Comey, both of whom have been involved in theinvestigations that led to the resignation of Attorney General Rex Tillerson.He played a key role throughout the administration as a national securityadviser, then as a special adviser to former President George W. Bush, then assecretary of Homeland Security under Bush and former presidential candidateRonald Clinton. In 2008, O’Malse was named by President Ronald Reagan as a newnational security adviser. In a speech last year, he detailed his experiencein the Reagan administration, as a new national security adviser. O’Malse saidhe was surprised by his ability to express his concerns about nationalsecurity, but added that he would be speaking more for years to come...
+  [108,443] F.3Conditional Generation Examples
+  [108,465] WMT14 De-En qualitative examples.We show qualitative examples on WMT14 De-En tocomplement the corpus-level BLEU results. ELF generally produces fluent and globally coherenttranslations.
+  [118,517] ELF-B WMT-DE-EN
+  [118,536] <Original text>
+  [118,556] Dieses Phänomen hat nach den Wahlen vom November 2010 an Bedeutung gewonnen,bei denen 675 neue republikanische Vertreter in 26 Staaten verzeichnet werdenkonnten.
+  [118,596] <Reference translation>
+  [118,616] This phenomenon gained momentum following the November 2010 elections, whichsaw 675 new Republican representatives added in 26 States.
+  [118,646] <Our translation>
+  [118,666] This phenomenon has increased in significance after the elections in November2010, in which 675 new Republicanan representatives have been recorded in 26countries.
+  [301,742] 34
+  --- layout: single
+
+======================================================================
+PAGE 35  (w=612 h=792)
+  [118,76] ELF-B WMT-DE-EN
+  [118,96] <Original text>
+  [118,116] Im Gegensatz zu Kanada sind die US-Bundesstaaten für die Durchführung derWahlen in den einzelnen Staaten verantwortlich.
+  [118,145] <Reference translation>
+  [118,165] Unlike in Canada, the American States are responsible for the organisation offederal elections in the United States.
+  [118,195] <Our translation>
+  [118,215] Unlike Canada, the United States are states responsible for holding electionsin each country.
+  [108,254] XSum qualitative examples.We show qualitative examples on XSum to complement the ROUGEresults. ELF generally produces fluent and concise summaries that capture the main content of thesource document.
+  [118,302] ELF-B XSum
+  [118,321] <Original text>
+  [118,341] Voges was forced to retire hurt on 86 after suffering the injury while battingduring the County Championship draw with Somerset on 4 June.Middlesex hope to have the Australian back for their T20 Blast game againstHampshire at Lord’s on 3 August.The 37-year-old has scored 230 runs in four first-class games this season atan average of 57.50."Losing Adam is naturally a blow as he contributes significantly to everythingwe do," director of cricket Angus Fraser said."His absence, however, does give opportunities to other players who aredesperate to play in the first XI."In the past we have coped well without an overseas player and I expect us todo so now."Defending county champions Middlesex are sixth in the Division One table,having drawn all four of their matches this season.Voges retired from international cricket in February with a Test battingaverage of 61.87 from 31 innings, second only to Australian great Sir DonaldBradman’s career average of 99.94 from 52 Tests.
+  [118,520] <Reference summarization>
+  [118,540] Middlesex batsman Adam Voges will be out until August after suffering a torncalf muscle in his right leg.
+  [118,570] <Our summarization>
+  [118,590] Middlesex captain Adam Voges will not miss the rest of the season as hestruggles with a bone injury.
+  [118,631] ELF-B XSum
+  [118,651] <Original text>
+  [118,671] Ms Kendall told the BBC Labour risked sending a "resignation letter to theBritish people as a serious party of government" by electing Mr Corbyn.Separately, Ms Cooper warned there was a "serious risk the party will split"if the left-winger becomes its leader.It comes as Labour begins sending out the first ballot papers to voters.
+  [301,742] 35
+  --- layout: single
+
+======================================================================
+PAGE 36  (w=612 h=792)
+  [118,72] The result of the contest will be announced at a special conference on 12September.More than 600,000 people have signed up to vote in the four-way contest butLabour has said applications are still being verified.610,753total electorate, though this may fall as party removes those not entitled tovoteOf which, full party members: 299,755Affiliated to a trade union: 189,703Registered to vote by paying GBP3: 121,295Meanwhile voting in the election for the new Scottish Labour leader ended atmidday.Mr Corbyn is due to unveil a 10-point policy plan while in Glasgow later.The popularity of the left-wing Islington North MP, who is promising "a newkind of politics", has sparked a row about the future direction of the Labourparty.Another leadership contender, Andy Burnham, told the BBC Mr Corbyn’s policies"lack credibility"."It’s not possible to promise free university education, re-nationalising theutilities, without that coming at a great cost and if you can’t explain howthat is going to be paid for then I don’t think we’ll win back the trust ofvoters on the economy," he said.BBC political correspondent Ross Hawkins said there had been "frustration" inrival camps who accused Mr Burnham of being reluctant to take on Mr Corbyn.This appeared to be his most direct attack yet, he added.But in an interview with Jeremy Vine on BBC Radio 2, Mr Burnham declined tofollow Ms Kendall and Ms Cooper and advise his supporters not to back MrCorbyn with their second and third preferences.He added: "People will say if they hear things like that, ’hang on, what doyou believe?’"In an interview with The Independent, Ms Kendall called for voters to mark MsCooper or Mr Burnham as second and third preferences, and avoid giving votesto Mr Corbyn."I have set out very clearly where I differ with all the candidates but ourdifferences with Jeremy’s kind of politics are far greater," said Ms Kendall.Speaking on BBC Radio 4’s Today programme she said she "can’t pretend to beagnostic" about a victory for Mr Corbyn, saying of the voting process: "It isan alternative vote system and I want to urge party members to use all oftheir different preferences."I will be using my second and third preferences and I would urge others to dothe same because I don’t want to see our party go back to the politics of the’80s, just being a party of protest."The Leicester West MP also said she did not see the party splitting, as it didin the 1980s when Labour members formed the Social Democratic Party.However, Ms Cooper told BBC 2’s Newsnight: "I think there is a serious riskthat the party will split, will polarise and I cannot bear to see that happenbecause there is too much at stake."Asked in an interview with grassroots Labour website Labourlist whether votersshould use their votes to try to prevent Mr Corbyn winning, she said: "I thinkpeople should use all of their preferences."And I think the focus has to be how do we make sure we can win that election,and that’s the most important thing - and I don’t think Jeremy can do that."Mr Corbyn has warned against "personal abuse" in the campaign, saying he wantsto focus on policy.His policy programme includes a commitment to "growth not austerity",nationalising the railways and energy sector, and a plan for nucleardisarmament.In an essay for the Fabian Society he also suggested Labour’s new increasedfollowing should be more involved in the party and proposed a review ofmembership fees to make the party more "inclusive".Former Prime Minister Gordon Brown is expected to join the debate over theleadership contest with a speech on Sunday, called "power for a purpose - thefuture of the Labour Party".
+  [301,742] 36
+  --- layout: single
+
+======================================================================
+PAGE 37  (w=612 h=792)
+  [118,72] Lance Price, former director of communications for Labour, told the BBC thecontest had been an "unedifying mess" and had "done nothing to reengage thelabour party with those millions of people who deserted it".The Guardian newspaper has endorsed Ms Cooper for the leadership while theDaily Mirror has given its backing to Mr Burnham, although the paper urged himto "find a role" in his team for Mr Corbyn, who it says has "lit up theelection campaign".Labour leadership hopefuls Liz Kendall and Yvette Cooper have said theirsupporters should back anyone other than Jeremy Corbyn in the contest.
+  [118,172] <Reference summarization>
+  [118,192] Labour leadership hopefuls Liz Kendall and Yvette Cooper have said theirsupporters should back anyone other than Jeremy Corbyn in the contest.
+  [118,222] <Our summarization>
+  [118,242] Labour leadership contender Kendall Kendall has warned she does not avoid anthreat of using Jeremy Corbyn with second and third preferences.
+  [108,282] F.4Unconditional Generation Examples of ELF+PD on OpenWebTex
+  [108,303] We show one sample from the final-round one-step distilled ELF+PD model at each sampling step,reported with its entropy and generative perplexity (Gen. PPL).
+  [118,336] ELF+PD OWT, sampling steps = 1
+  [118,357] Entropy: 5.28 Gen. PPL: 132.89Naturally Bloomberg has introduced a new Black Black S on the Laptop, whichwhich the widely seems it it sound. –Ahan Geet (@Just AG) Uhr)) The The BlackS Sport also well, Samsung has that it will likely to include its Hot Rollerset..Bull and want to are on the first Smartphone for A Mr Bols has came from hisApple web company ago ago ago ago, told my website earlier Tuesday that I willbe waiting to see a new speedset soon. And he know if Apple will consider addwith the mod and the software that the refurbished mini- Sculble. In theaddition to this tablet, it offers a lot more quickly.Obviously, the first latest version of iPhone’s the Sure Heartn’t Version,although it’s not considered the boosted design level of the OS manyhavesupposedly launched in Fia but, for However, there is unclear, but notunclear whether the is wills up for how the game will as soon as Software,translate. We’ll a some people on to various pictures about, and I’ll have aspring next week and watch a review on Samsung’s iPhone Stream soon...
+  [118,540] ELF+PD OWT, sampling steps = 2
+  [118,561] Entropy: 5.47 Gen. PPL: 64.76
+  [118,581] "I think that we have always had the responsibility to be able to make ourenvironment more accessible to any users. WipWe have been truly one of thebest gaming companies in the world. We’s been quite large in the years. Overthe years, the company known, Wi-Breth has given them with a ideas on how todevelop their own software. Despite the custom design design Dearms was unableto prove the company they wanted to become a portable programmeer, but then ittook a lot of time that was quite ambitious and a little bit tedious. Alittleerson, Vice manager of programming management at WipBreth and wassomeone who was helped with the development of a program known asOpenPreadrder. "We wanted to create a better, clean,, efficient solution, andthen we could do it, that wasns not exactly what we wanted to," Wiet said. "Our goal was to create a robust free loopor that allows live programs easilyto your Windows devices. Now, this is a huge step because it’s fast and high-aprogramable, and because you don’t have to create full programs to all of your
+  [301,742] 37
+  --- layout: single
+
+======================================================================
+PAGE 38  (w=612 h=792)
+  [118,72] Windows devices, you definitely don’t have to beable to create everything foryour Windows 10 devices, which you can’t really do. This will be a big step toyour your own laptops, but it a lot more cleaner and more fun for the wholeenvironment." Conclusion: The entire version of Wi-Breth wastracted muchattention by the developers and were hoping to develop their. decision: By thefirst time when after re got back into the project, they devised veryOpenCrunter Engine and I am happy that they decided in they, they were able tocreate this tool. It is an extremely innovative, and would bring everyfunctionality in the future. As very simple, it doesn’t have great a lot tweaksupport, but there is not much that can be required. WieBreal has incredibleportability for use every any Windows Windows 10 devices. It works well with alarge looper function, and can can be used all around the world in the future."I think the project will have be completed but it’s not really a littledifficult, at this point we hope to get it done again. We’ll have a to moremore details in the future...
+  [118,246] ELF+PD OWT, sampling steps = 4
+  [118,267] Entropy: 5.32 Gen. PPL: 30.76
+  [118,287] "I’m confident that I’ll be the best player on the team, and I don’t know howif you’ll get him back as as long as he can. "He’s amazing. I’ve scored one of15 games of the season, and he played some games and did pretty well. I justtake a lot of time to get back. He’s a great young winger, and he doesn’t havea lot of time left with him. He’s got a great team, so he’s a really goodstrikeer and he’s got a lot of experience on team. But’s squad is very good.He’s a really, good guy." Spritley said that Reilly’s being on the field thisSaturday. "I don’t know how he will be vs. Blues in Saturday, but I don’tknow. I don’t know that. I just don’t think he’ll do anything. That’spossible, though. I’m confident that." The U.S. Food and Drug Drug Agency iswarning that there could be about a half billion people’ use of eadain drug.The drug, known as Common Deperdomidicent’s Disease (CCD), has become apopular of more than 1 million people over the past 10 years and has a rangeconditions such as hepat disease, cancer, obesity, and traumatic heartdisease. However, eadain drug is already under development in many countriesover the past decade. And, in a trend that’s new, researchers are confidentthat eaedain drug can potentially create danger to many organisms and othermedical diseases, such as heart cancer. In a study estimate, about 50\% ofpeople using eaddain drug comes from other parts of the human body.Investigators believe eadain drug is that could reduce danger to life, but isnot expected to lead to death. "We’re expecting an up to two billion billionpeople of use over the next 10 or years,"...
+  [118,530] ELF+PD OWT, sampling steps = 8
+  [118,551] Entropy: 5.24 Gen. PPL: 19.22
+  [118,571] Now let us take an deeper look at the decline in basic education programs overthe last couple of decades. During the 1990s, when the basic industry wasweakening, low-income people were declining. They didn’t have a good chance tolearn it. But by the 1990s, basic education was weaker–low-income people werevery lacking of money. They didn’t have the resources to understand thefundamental education program, which is a lack of adequate understanding ofthe program. What we’ve seen is the fact that the program is a politicalproblem. The poor understanding of the fundamental program is a politicalproblem for the low-income people. The basic program isn’t a politicallypolitical problem. The problem is that many people that education isn’t apolitical problem. It is not a political policy problem. They’re far lessaware of how the fundamental program is being conducted. As we’ve seen,low-income people don’t get access to basic education. They don’t have enoughscientific expertise and have enough of political experience. I’m a professorof politics in Minnesota and I am a professor of political science. I also
+  [301,742] 38
+  --- layout: single
+
+======================================================================
+PAGE 39  (w=612 h=792)
+  [118,72] talk about the fact that the majority of low-income people (65\%) don’t havethe adequate money to learn to understand the basic program–which, I know,hasn’t happened. We need to become more aware that basic education forlow-income people is declining. This is really an important part of makingsure we have more understanding what’s behind these declines. When it comes tobasic education, you should become more aware that the program isn’t based onknowledge of what’s happening and how it’s happening, so you can move on stepfurther and get a little bit more sleep....
+  [301,742] 39
+  --- layout: single
