@@ -1,0 +1,127 @@
+
+### PAGE 1  draw=12
+    IMG xref=993 (70.9, 510.1, 293.1, 664.5)
+    IMG xref=994 (302.2, 510.1, 524.4, 664.5)
+    CAPTION p1: Figure 1 | (a) Performance of DeepSeek-V4.1-Flash and its counterparts on agentic benchmarks.
+
+### PAGE 2  draw=0
+
+### PAGE 3  draw=0
+
+### PAGE 4  draw=0
+
+### PAGE 5  draw=0
+    IMG xref=8 (161.6, 85.0, 433.7, 229.7)
+    CAPTION p5: Figure 2 | Single-token Decode FLOPs versus context length across generations of DeepSeek
+
+### PAGE 6  draw=0
+
+### PAGE 7  draw=99
+    CAPTION p7: Figure 3 | Overall architecture of DeepSeek-V4.1-Flash. The 40-layer network is divided into
+
+### PAGE 8  draw=0
+
+### PAGE 9  draw=1
+
+### PAGE 10  draw=104
+    CAPTION p10: Figure 4 | Three operating modes of CSA2. The modes differ in how they obtain main KV,
+
+### PAGE 11  draw=515
+    CAPTION p11: Figure 5 | Hierarchical Sparse Indexer. Each square represents a position; green squares mark
+
+### PAGE 12  draw=0
+
+### PAGE 13  draw=0
+
+### PAGE 14  draw=2
+
+### PAGE 15  draw=5
+
+### PAGE 16  draw=5
+    CAPTION p16: Algorithm 1 Momentum update with Sinkhorn balancing
+
+### PAGE 17  draw=3
+
+### PAGE 18  draw=0
+
+### PAGE 19  draw=0
+
+### PAGE 20  draw=2
+
+### PAGE 21  draw=0
+
+### PAGE 22  draw=0
+
+### PAGE 23  draw=0
+
+### PAGE 24  draw=50
+    CAPTION p24: Table 1 | Comparison among DeepSeek-V4-Flash-Base, DeepSeek-V4-Pro-Base, and DeepSeek-
+
+### PAGE 25  draw=2
+    IMG xref=74 (152.5, 85.0, 442.8, 239.4)
+    CAPTION p25: Figure 6 | Bits-per-bytes (BPB) comparison of DeepSeek-V4-Flash-Base, DeepSeek-V4-Pro-Base
+
+### PAGE 26  draw=0
+
+### PAGE 27  draw=363
+    CAPTION p27: Figure 7 | Performance improves on various code agent benchmarks as RL training scales in the
+
+### PAGE 28  draw=461
+    CAPTION p28: Figure 8 | Performance improves with cumulative RL steps when jointly training across multiple
+
+### PAGE 29  draw=4
+
+### PAGE 30  draw=3
+    CAPTION p30: Table 2 | Mapping between the public API reasoning-effort tiers and the underlying scalar effort
+
+### PAGE 31  draw=0
+
+### PAGE 32  draw=0
+
+### PAGE 33  draw=66
+    CAPTION p33: Table 3 | Comparison between DeepSeek-V4.1-Flash with closed/open source models. † denotes
+
+### PAGE 34  draw=0
+    CAPTION p34: Figure 9, both accuracy and output length increase steadily with the effort level across reasoning
+    CAPTION p34: Figure 9 reports performance and average response length across a range of budget values. As
+
+### PAGE 35  draw=203
+    CAPTION p35: Figure 9 | Performance and output length as a function of reasoning effort. Each panel plots
+    CAPTION p35: Table 4 | Performance across agent scaffolds at Max reasoning effort.
+
+### PAGE 36  draw=87
+    CAPTION p36: Figure 10 | Test-time compute scaling for single-agent and multi-agent configurations on Pro-
+
+### PAGE 37  draw=0
+
+### PAGE 38  draw=63
+
+### PAGE 39  draw=61
+
+### PAGE 40  draw=186
+
+### PAGE 41  draw=67
+
+### PAGE 42  draw=107
+
+### PAGE 43  draw=51
+
+### PAGE 44  draw=163
+
+### PAGE 45  draw=38
+
+### PAGE 46  draw=0
+
+### PAGE 47  draw=0
+
+### PAGE 48  draw=13
+    CAPTION p48: Table 5 | Performance across Claude Code versions at Max reasoning effort.
+    CAPTION p48: Figure 12 shows that the reasoning-effort setting gives smooth, well-behaved control over both
+
+### PAGE 49  draw=373
+    CAPTION p49: Figure 11 | Reasoning effort drives trajectory length consistently but correlates only weakly with
+
+### PAGE 50  draw=439
+    CAPTION p50: Figure 12 | Performance and output length as a function of reasoning effort on eight reasoning-
+
+### PAGE 51  draw=0
